@@ -70,12 +70,20 @@ export default async function Landing() {
           <span className="font-mono text-[0.72rem] tracking-[0.18em] uppercase text-[color:var(--ink)]">
             Watch · Party
           </span>
-          <Link
-            href="/rooms"
-            className="ml-auto font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)] hover:text-[color:var(--accent)] transition-colors"
-          >
-            Browse rooms →
-          </Link>
+          <div className="ml-auto flex items-center gap-3 sm:gap-5">
+            <Link
+              href="/rooms"
+              className="font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)] hover:text-[color:var(--accent)] transition-colors"
+            >
+              Browse rooms →
+            </Link>
+            <Link
+              href="/login"
+              className="font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)] hover:text-[color:var(--accent)] transition-colors"
+            >
+              Sign in
+            </Link>
+          </div>
         </div>
       </header>
 

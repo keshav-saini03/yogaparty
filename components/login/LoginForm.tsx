@@ -1,60 +1,37 @@
 'use client';
 
-import { useActionState, useEffect, useState } from 'react';
+import { useActionState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { createSignup } from '@/app/actions/signup';
-import type { SignupState } from '@/lib/types';
-import { CountryCodeSelect } from './CountryCodeSelect';
+import { loginByPhone, type LoginState } from '@/app/actions/login';
+import { CountryCodeSelect } from '@/components/signup/CountryCodeSelect';
 
 const NEXT_PATH_RE = /^\/room\/[0-9a-f-]{36}$/i;
 
-type Props = { detectedCity: string | null };
-
-export function SignupForm({ detectedCity }: Props) {
-  const [state, formAction, pending] = useActionState<SignupState, FormData>(
-    createSignup,
-    undefined,
+export function LoginForm() {
+  const [state, formAction, pending] = useActionState<LoginState, FormData>(
+    loginByPhone,
+    undefined
   );
-  const [referrerId, setReferrerId] = useState('');
+
   const searchParams = useSearchParams();
   const nextRaw = searchParams.get('next');
   const nextPath = nextRaw && NEXT_PATH_RE.test(nextRaw) ? nextRaw : '';
-
-  useEffect(() => {
-    setReferrerId(localStorage.getItem('yp_ref') ?? '');
-  }, []);
+  const signupHref = nextPath ? `/signup?next=${nextPath}` : '/signup';
 
   return (
     <form action={formAction} className="space-y-6">
       <div>
         <label
-          htmlFor="signup-name"
+          htmlFor="login-phone"
           className="block font-mono text-[0.65rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)] mb-2"
         >
-          Name
-        </label>
-        <input
-          id="signup-name"
-          name="name"
-          required
-          placeholder="What should we call you?"
-          autoComplete="name"
-          className="field"
-        />
-      </div>
-
-      <div>
-        <label
-          htmlFor="signup-phone"
-          className="block font-mono text-[0.65rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)] mb-2"
-        >
-          Phone
+          Phone you signed up with
         </label>
         <div className="flex gap-px bg-[color:var(--line)]">
           <CountryCodeSelect />
           <input
-            id="signup-phone"
+            id="login-phone"
             name="phone"
             required
             inputMode="numeric"
@@ -66,26 +43,16 @@ export function SignupForm({ detectedCity }: Props) {
         </div>
       </div>
 
-      <div className="border border-[color:var(--line)] p-4 bg-[color:var(--bg)]">
-        <div className="font-mono text-[0.65rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)]">
-          Joining from
-        </div>
-        <div className="mt-1 font-mono uppercase tracking-[0.12em] text-[color:var(--ink)]">
-          {detectedCity ?? 'Your detected location'}
-        </div>
-      </div>
-
       {nextPath && (
         <div className="border border-[color:var(--accent-soft)] bg-[color:var(--accent-soft)] p-3 font-mono text-[0.7rem] tracking-[0.16em] uppercase text-[color:var(--accent)]">
           Resuming → {nextPath}
         </div>
       )}
 
-      <input type="hidden" name="referrer_id" value={referrerId} readOnly />
       <input type="hidden" name="next" value={nextPath} readOnly />
 
       <button type="submit" disabled={pending} className="cta w-full justify-center">
-        {pending ? 'Joining…' : 'Tune in'}
+        {pending ? 'Tuning in…' : 'Tune back in'}
         <span className="arrow" aria-hidden />
       </button>
 
@@ -99,12 +66,12 @@ export function SignupForm({ detectedCity }: Props) {
       )}
 
       <p className="border-t border-[color:var(--line)] pt-5 font-mono text-[0.65rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)]">
-        Already joined?{' '}
+        New here?{' '}
         <Link
-          href={nextPath ? `/login?next=${nextPath}` : '/login'}
+          href={signupHref}
           className="text-[color:var(--accent)] hover:underline"
         >
-          Sign in with your phone →
+          Sign up in 3 fields →
         </Link>
       </p>
     </form>
