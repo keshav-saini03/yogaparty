@@ -19,8 +19,8 @@ import type { SignupState } from '@/lib/types';
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const DUPLICATE_PHONE_ERROR =
-  "This number is already in! Check your messages — you're already tuned in.";
+const DUPLICATE_PHONE_FALLBACK_ERROR =
+  "This number is already registered. Your seat is saved; watch-room details will arrive before we go live.";
 
 export async function createSignup(
   _prev: SignupState,
@@ -82,7 +82,19 @@ export async function createSignup(
   }
 
   if (error?.code === '23505') {
-    return { error: DUPLICATE_PHONE_ERROR };
+    const existing = await supabase
+      .from('signups')
+      .select('id')
+      .eq('phone', phone)
+      .maybeSingle();
+
+    if (existing.data?.id) {
+      // Idempotent submit path: existing signup should land in the same room URL.
+      redirect(`/room/${existing.data.id}`);
+    }
+
+    console.error('duplicate signup lookup failed', existing.error);
+    return { error: DUPLICATE_PHONE_FALLBACK_ERROR };
   }
 
   if (error || !data) {
