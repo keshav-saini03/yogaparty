@@ -40,9 +40,20 @@ describe('pickVideo', () => {
     expect(result).toEqual({ error: 'Invalid room id.' });
   });
 
-  it('rejects non-curated videoId', async () => {
-    const result = await pickVideo(VALID_UUID, 'malicious-id');
-    expect(result).toEqual({ error: 'Video not in curated list.' });
+  it('rejects malformed videoId (not 11 chars)', async () => {
+    const result = await pickVideo(VALID_UUID, 'short');
+    expect(result).toEqual({ error: 'Not a valid YouTube video id.' });
+  });
+
+  it('rejects videoId with illegal characters', async () => {
+    const result = await pickVideo(VALID_UUID, 'has space!!');
+    expect(result).toEqual({ error: 'Not a valid YouTube video id.' });
+  });
+
+  it('accepts a non-curated but well-formed YouTube id', async () => {
+    const result = await pickVideo(VALID_UUID, 'dQw4w9WgXcQ');
+    expect(result).toEqual({ ok: true });
+    expect(updateEqEq).toHaveBeenCalledOnce();
   });
 
   it('rejects when no session cookie', async () => {

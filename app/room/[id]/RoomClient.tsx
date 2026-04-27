@@ -317,11 +317,20 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
 
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="min-w-0">
-                {currentVideoMeta ? (
+                {videoId ? (
                   <>
                     <p className="eyebrow">Now broadcasting</p>
                     <p className="mt-1 font-display text-lg sm:text-xl text-[color:var(--ink)] truncate">
-                      {currentVideoMeta.title}
+                      {currentVideoMeta ? (
+                        currentVideoMeta.title
+                      ) : (
+                        <>
+                          Custom broadcast
+                          <span className="ml-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)]">
+                            {videoId}
+                          </span>
+                        </>
+                      )}
                     </p>
                   </>
                 ) : (

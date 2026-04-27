@@ -2,7 +2,7 @@
 
 import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { isCuratedVideo } from '@/lib/videos';
+import { isYouTubeId } from '@/lib/videos';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -16,8 +16,8 @@ export async function pickVideo(
   if (!UUID_RE.test(roomId)) {
     return { error: 'Invalid room id.' };
   }
-  if (!isCuratedVideo(videoId)) {
-    return { error: 'Video not in curated list.' };
+  if (!isYouTubeId(videoId)) {
+    return { error: 'Not a valid YouTube video id.' };
   }
 
   const c = await cookies();

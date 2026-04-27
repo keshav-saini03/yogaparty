@@ -54,7 +54,7 @@ These are stack/scope choices treated as **locked** for the duration of the hack
 
 - **D-008 — First joiner is host.** Host transfers to next person on leave. Only host can play/pause/seek.
 - **D-009 — Sync algorithm:** host broadcasts `sync_play | sync_pause | sync_seek`; clients send `heartbeat { currentTime }` every 5s; host sends `sync_correct` to a single client when drift > 2s.
-- **D-010 — Pre-curated Habuild video list.** Host picks from list; no free-form URL input.
+- **D-010 — Curated quick-picks + free-form YouTube URL (revised 2026-04-27).** The video picker exposes both: (1) the curated Habuild quick-picks list and (2) a "Paste YouTube URL" input that accepts youtu.be / youtube.com/watch?v= / /embed/ / /shorts/ / /live/ formats and bare 11-char ids. Server-side validation enforces only the YouTube id shape (`/^[a-zA-Z0-9_-]{11}$/`) — no curated-list gating.
 - **D-013 — One room type:** public `city` rooms only. Squad rooms removed from v1 scope (2026-04-27 pivot).
 - **D-016 — Sharded city rooms, max 7 participants/room.** A city has many rooms; each capped at 7. `findOrCreateCityRoom(city)` returns the first non-full active city room, else creates a new one. Sharding is signup-time (assigned via `signups.room_id`), not presence-time, so it's race-deterministic and doesn't require live presence counting on the server.
 - **D-017 — Audio + video calls over WebRTC peer mesh.** Each participant connects directly to every other (mesh, N≤7 = 6 peer connections per client). Supabase Realtime channel carries the signaling (offer / answer / ICE). STUN-only via Google public servers (no TURN, no SFU, no paid services). Video on the watch room is presented as a floating overlay; mic/camera off by default per participant.
