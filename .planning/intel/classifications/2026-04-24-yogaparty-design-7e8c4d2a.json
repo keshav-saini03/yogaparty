@@ -1,0 +1,24 @@
+{
+  "source_path": "/Users/habuild/Desktop/work/Habuild/hack-a-thon/docs/superpowers/specs/2026-04-24-yogaparty-design.md",
+  "type": "SPEC",
+  "confidence": "high",
+  "manifest_override": true,
+  "title": "YogaParty — Watch Habuild Yoga Together With People Near You",
+  "summary": "Technical design spec for YogaParty, a Next.js + Supabase watch-party platform that drives Habuild signups via city rooms, squads, and WhatsApp viral loops during a 48-hour hackathon.",
+  "scope": [
+    "YogaParty platform",
+    "Next.js 15 App Router frontend",
+    "Supabase Postgres data model",
+    "Supabase Realtime channels (sync, chat, presence)",
+    "YouTube IFrame video sync",
+    "City rooms and squad rooms",
+    "WhatsApp referral and sharing flow",
+    "City and referrer leaderboards",
+    "Vercel Edge IP geolocation",
+    "Hackathon build priorities and success metrics"
+  ],
+  "cross_refs": [],
+  "locked": false,
+  "precedence": 1,
+  "notes": ""
+}
