@@ -2,6 +2,8 @@
 
 Watch yoga together with people near you. Built for the Habuild "Kuch Karke Dikha" 48-hour hackathon (Apr 27–28, 2026).
 
+**Live:** https://yogaparty-e7i5a1x9l-keshav-saini03s-projects.vercel.app/
+
 ## Stack
 
 - Next.js 15 (App Router) + TypeScript
