@@ -58,7 +58,13 @@ The phases mirror the SPEC's "always-shippable" layered build priority. After ev
   3. When the host plays, pauses, or seeks a Habuild video chosen from the curated list, every other client mirrors the action within ~2 seconds; a client whose drift exceeds 2s is corrected by a `sync_correct` from the host
   4. A message sent in chat appears for everyone in the room with sender name and timestamp; mobile renders chat as a bottom sheet, desktop as a sidebar
   5. Joining and leaving the room updates the live participant count and list for everyone else without a page refresh
-**Plans:** TBD
+**Plans:** 6 plans
+- [ ] 03-01-PLAN.md — Wave 0: vitest infra + sync-utils.ts (electHost, shouldCorrect) + test stubs + manual smoke checklist (Wave 0, autonomous)
+- [ ] 03-02-PLAN.md — Core libs: react-youtube install, lib/videos.ts, lib/room-types.ts, lib/rooms.ts (findOrCreateCityRoom) + tests (Wave 1, autonomous)
+- [ ] 03-03-PLAN.md — Phase 2 carryover: signup.ts cookie + findOrCreateCityRoom + ?next= allow-list + pickVideo server action (Wave 2, autonomous)
+- [ ] 03-04-PLAN.md — Server route + RoomClient channel lifecycle + Player + RoomHeader + HostBadge (Wave 2, autonomous)
+- [ ] 03-05-PLAN.md — usePresence + useRoomSync hooks + PresenceList + VideoPickerSheet + RoomClient wiring (Wave 3, autonomous)
+- [ ] 03-06-PLAN.md — Chat bottom-sheet/sidebar + Chat tests + 9-step manual smoke checkpoint (Wave 4, has checkpoint)
 **UI hint**: yes
 
 ### Phase 4: WhatsApp Sharing & Referral
@@ -142,7 +148,7 @@ Hours are SPEC-provided guidance, not commitments. The 48-hour window includes s
 |---|---|---|---|
 | 1. Scaffold & Deploy | 0/2 | Not started | - |
 | 2. Landing & Signup | 0/4 | Not started | - |
-| 3. City Watch Room | 0/0 | Not started | - |
+| 3. City Watch Room | 0/6 | Not started | - |
 | 4. WhatsApp Sharing & Referral | 0/0 | Not started | - |
 | 5. Competition Engine | 0/0 | Not started | - |
 | 6. Squad Rooms | 0/0 | Not started | - |
