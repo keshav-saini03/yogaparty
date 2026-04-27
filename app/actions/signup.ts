@@ -1,11 +1,20 @@
 'use server';
 
 import { redirect } from 'next/navigation';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getDetectedCity } from '@/lib/geo';
 import type { SignupState } from '@/lib/types';
 // Note: a 'use server' module may only export async functions per Next.js spec.
 // SignupState is the canonical type; clients should import it from '@/lib/types'.
+//
+// Plan 02-04 Task 3 deviation (2026-04-27): switched from the anon-key server
+// client to the service-role admin client. The Supabase project enabled RLS by
+// default on `signups`, blocking anon INSERT (postgres error 42501). Plan 02-02
+// SUMMARY.md flagged this exact pivot ("(a) move to the service-role client or
+// (b) add a permissive insert policy for `anon`"). Option (a) is chosen because
+// it requires zero DB schema changes and the admin client wrapper already
+// exists in lib/supabase/admin.ts. The service-role key is server-only and
+// never reaches the browser; this stays inside a 'use server' module.
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -40,7 +49,7 @@ export async function createSignup(
   // Sole source of city. Client-supplied values are silently ignored.
   const city = await getDetectedCity();
 
-  const supabase = await createClient();
+  const supabase = createAdminClient();
 
   let { data, error } = await supabase
     .from('signups')
