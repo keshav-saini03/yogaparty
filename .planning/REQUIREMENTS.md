@@ -210,8 +210,8 @@ Each requirement has acceptance criteria written as observable behaviors. Source
 | REQ-CHAT | Phase 3 | Pending |
 | REQ-PRESENCE | Phase 3 | Pending |
 | REQ-CONTENT-LIST | Phase 3 | Pending |
-| REQ-WHATSAPP-SHARE | Phase 4 | Pending |
-| REQ-REFERRAL | Phase 4 | Pending |
+| REQ-WHATSAPP-SHARE | Phase 4 | In progress (post-signup + in-room invite shipped; city-competition wires in Phase 5; post-session in Phase 7) |
+| REQ-REFERRAL | Phase 4 | Complete (capture in Phase 2, self-referral guard added Phase 4) |
 | REQ-LEADERBOARD | Phase 5 | Pending |
 | REQ-LIVE-COUNTER | Phase 5 | Pending |
 | REQ-ROOM-SHARDING | Phase 6 | Pending |

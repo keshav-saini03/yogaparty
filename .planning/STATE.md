@@ -31,9 +31,9 @@ progress:
 Phase: 03 (city-watch-room) — CONTEXT GATHERED
 Plan: 0 of TBD
 
-- **Phase:** Phase 03 (City Watch Room) — CONTEXT.md written; ready for `/gsd-plan-phase 3`
-- **Status:** Phase 02 complete. Phase 03 context locked with 26 decisions (D-301..D-326) across 4 gray areas (URL, identity, host election, video picker).
-- **Progress:** `[██████████] 2/7 phases complete (6/6 plans); Phase 3 ready to plan`
+- **Phase:** Phase 04 (WhatsApp + Referral) — shipped 2026-04-27
+- **Status:** Phases 1-3 complete; Phase 4 shipped (post-signup + in-room invite + self-referral guard). REQ-WHATSAPP-SHARE: 2 of 4 triggers wired; remaining 2 (city-competition, post-session) ship in Phase 5/7. REQ-REFERRAL: complete.
+- **Progress:** `[████████████] 3.5/7 phases complete; Phase 5 (Competition Engine) is next`
 
 ## Decisions
 
@@ -43,6 +43,7 @@ Plan: 0 of TBD
 - 2026-04-27 — Phase 3 context gathered (`/gsd-discuss-phase 3`). Key locks: `/room/[id]` resolves by `rooms.id` (D-301..304); HTTP-only `yp_session` cookie carries identity (D-305..308); presence-derived host election with no schema drift (D-309..313); curated videos in `lib/videos.ts` const, host swap via modal/sheet, room created with `youtube_video_id=NULL` and shows "waiting for host pick" (D-314..318); chat ephemeral broadcast-only (D-319..321). Phase 3 must update `app/actions/signup.ts:93` and `:106` to redirect to `rooms.id` via `findOrCreateCityRoom(city)` helper, resolving the open Phase 2 review item.
 - 2026-04-27 — Phase 3 shipped (commits `5458a1e`, `386cd6c`, `516997f`). Two production fixes after deploy: (1) signup → /room redirect loop on stale Phase-2-era URLs (room page now falls back to user's city room when room id not found, signup action validates `next` against actual rooms row); (2) Supabase Realtime "cannot add callbacks after subscribe()" — all `.on()` registrations consolidated into RoomClient's single channel-lifecycle effect before `.subscribe()`. Hooks reduced to pure helpers (usePresence = host derivation, useRoomSync = imperative emitters).
 - 2026-04-27 — **Scope pivot:** REQ-SQUAD-ROOM dropped (Phase 6 was "Squad Rooms"). Phase 6 now ships REQ-ROOM-SHARDING (multiple city rooms, 7-person cap, signup-time assignment via `signups.room_id`) + REQ-WEBRTC-CALL (peer-mesh audio + video overlay on the watch room, Supabase channel for signaling, STUN-only, no TURN/SFU). PROJECT.md decisions updated: D-013 revised, D-016 added (sharding), D-017 added (WebRTC mesh). Schema migration `0002_remove_squads_add_sharding.sql` ships in Phase 6.
+- 2026-04-27 — Phase 4 (WhatsApp + Referral) shipped. New `lib/whatsapp.ts` with all four SPEC Hinglish copy templates (post-signup, in-room invite, city-competition, post-session) + URL builders. New `WhatsAppShareButton` reusable component. Wired to room header (always-visible "Invite friends" CTA) and to a one-time post-signup welcome banner inside `RoomClient` (dismiss persists to localStorage per signup id). Self-referral guard added to `app/actions/signup.ts`: if `yp_session` cookie matches the submitted `referrer_id`, the referrer is dropped to null. REQ-REFERRAL fully complete; REQ-WHATSAPP-SHARE partially shipped (city-competition trigger wires in Phase 5 leaderboard, post-session trigger in Phase 7 polish). 27 new unit tests (whatsapp helper 21, share button 6).
 
 ## Performance Metrics
 

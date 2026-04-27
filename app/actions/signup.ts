@@ -68,6 +68,17 @@ export async function createSignup(
     ? rawReferrer
     : null;
 
+  // Self-referral guard: if the same browser/device that already has a
+  // signup tries to use that signup's id as ?ref=, ignore it. Prevents users
+  // from referring themselves with a second phone number.
+  if (referrerId) {
+    const c = await cookies();
+    const existingSession = c.get('yp_session')?.value;
+    if (existingSession && existingSession === referrerId) {
+      referrerId = null;
+    }
+  }
+
   const city = await getDetectedCity();
   const supabase = createAdminClient();
 

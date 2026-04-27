@@ -1,8 +1,11 @@
 import Link from 'next/link';
+import { WhatsAppShareButton } from '@/components/share/WhatsAppShareButton';
+import { inRoomInviteCopy } from '@/lib/whatsapp';
 
 type Props = {
   city: string | null;
   participantCount: number;
+  selfId: string;
   onChatToggle?: () => void;
   isMobileChatOpen?: boolean;
 };
@@ -10,11 +13,18 @@ type Props = {
 export function RoomHeader({
   city,
   participantCount,
+  selfId,
   onChatToggle,
   isMobileChatOpen,
 }: Props) {
   const cityLabel = city && city !== 'GLOBAL' ? city : 'around the world';
   const countLabel = participantCount === 1 ? '1 person' : `${participantCount} people`;
+
+  const inviteText = inRoomInviteCopy({
+    cityCount: participantCount,
+    cityName: city,
+    refId: selfId,
+  });
 
   return (
     <header className="border-b border-[color:var(--line)] bg-[color:var(--bg)]">
@@ -31,17 +41,16 @@ export function RoomHeader({
           ← Watch · Party
         </Link>
 
-        <div className="ml-auto flex items-center gap-3 sm:gap-4">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap">
           <span className="font-mono text-[0.62rem] sm:text-[0.7rem] tracking-[0.18em] uppercase text-[color:var(--ink-soft)]">
             <span className="text-[color:var(--accent)]">{countLabel}</span>{' '}
             from <span className="text-[color:var(--ink)]">{cityLabel}</span>
           </span>
 
-          {/* Phase 4 share slot — reserved layout, not wired to wa.me yet */}
-          <span
-            data-share-slot
-            aria-hidden
-            className="hidden sm:inline-block w-px h-6 bg-[color:var(--line)]"
+          <WhatsAppShareButton
+            text={inviteText}
+            label="Invite friends"
+            variant="pill"
           />
 
           {onChatToggle && (

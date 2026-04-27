@@ -13,6 +13,8 @@ import { useRoomSync } from '@/hooks/useRoomSync';
 import type { ChatMsg } from '@/lib/room-types';
 import { CURATED_VIDEOS } from '@/lib/videos';
 import { pickVideo } from '@/app/actions/pick-video';
+import { WhatsAppShareButton } from '@/components/share/WhatsAppShareButton';
+import { postSignupCopy } from '@/lib/whatsapp';
 import {
   correctedTimestamp,
   dedupePresence,
@@ -38,6 +40,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [pickError, setPickError] = useState<string | null>(null);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
 
   const playerRef = useRef<PlayerHandle | null>(null);
   const suppressNextOutboundRef = useRef(false);
@@ -206,6 +209,21 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     if (isHost && !videoId) setPickerOpen(true);
   }, [isHost, videoId]);
 
+  // Show post-signup share banner once per browser per signup id.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const key = `yp_welcome_seen_${self.user_id}`;
+    if (window.localStorage.getItem(key) === '1') return;
+    setWelcomeOpen(true);
+  }, [self.user_id]);
+
+  const dismissWelcome = () => {
+    setWelcomeOpen(false);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(`yp_welcome_seen_${self.user_id}`, '1');
+    }
+  };
+
   const onPickVideo = async (id: string) => {
     setPickError(null);
     setPickerOpen(false);
@@ -237,6 +255,12 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     [videoId]
   );
 
+  const welcomeShareText = postSignupCopy({
+    cityCount: participants.length,
+    cityName: roomCity,
+    refId: self.user_id,
+  });
+
   // Suppress unused-host warning while keeping it accessible if needed.
   void host;
 
@@ -245,6 +269,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       <RoomHeader
         city={roomCity}
         participantCount={participants.length}
+        selfId={self.user_id}
         onChatToggle={() => setChatOpen((v) => !v)}
         isMobileChatOpen={chatOpen}
       />
@@ -252,6 +277,35 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
         <main className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 flex flex-col gap-4 p-4 sm:p-6">
+            {welcomeOpen && (
+              <div className="rise relative border border-[#19d27a] bg-[rgba(25,210,122,0.08)] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
+                <div className="min-w-0 flex-1">
+                  <p className="font-mono text-[0.62rem] tracking-[0.22em] uppercase text-[#19d27a]">
+                    You&apos;re tuned in
+                  </p>
+                  <p className="mt-1.5 font-display text-base sm:text-lg leading-snug text-[color:var(--ink)]">
+                    Drop the link in your group — yoga is better with people.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  <WhatsAppShareButton
+                    text={welcomeShareText}
+                    label="Share now"
+                    variant="pill"
+                    onShare={dismissWelcome}
+                  />
+                  <button
+                    type="button"
+                    onClick={dismissWelcome}
+                    aria-label="Dismiss share prompt"
+                    className="font-mono text-[0.62rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)] hover:text-[color:var(--ink)] px-2 py-1"
+                  >
+                    Later
+                  </button>
+                </div>
+              </div>
+            )}
+
             <Player
               videoId={videoId}
               isHost={isHost}
