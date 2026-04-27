@@ -6,12 +6,40 @@ type Props = {
 
 export function CounterPlaceholder({ total, india, international }: Props) {
   const fmt = new Intl.NumberFormat('en-IN');
+
   return (
-    <section className="px-6 mt-10 max-w-md mx-auto text-center">
-      <div className="text-5xl font-semibold tabular-nums">{fmt.format(total)}</div>
-      <div className="text-sm text-gray-500 mt-1">
-        {fmt.format(india)} from India · {fmt.format(international)} international
+    <div className="rise relative" style={{ animationDelay: '320ms' }}>
+      <div className="flex items-baseline gap-3 pb-3 border-b border-[color:var(--line)]">
+        <span className="eyebrow">Watching now</span>
+        <span className="ml-auto font-mono text-[0.65rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)]">
+          ↻ Real-time
+        </span>
       </div>
-    </section>
+
+      <div
+        className="font-mono ticker-glow tabular-nums text-[clamp(4.5rem,14vw,10rem)] leading-[0.9] tracking-[-0.05em] text-[color:var(--accent)] mt-6"
+      >
+        {fmt.format(total).padStart(4, '0')}
+      </div>
+
+      <div className="mt-8 grid grid-cols-2 gap-px bg-[color:var(--line)]">
+        <div className="bg-[color:var(--bg)] p-5">
+          <div className="font-mono text-[0.65rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)]">
+            From India
+          </div>
+          <div className="font-mono tabular-nums text-3xl mt-2 text-[color:var(--ink)]">
+            {fmt.format(india)}
+          </div>
+        </div>
+        <div className="bg-[color:var(--bg)] p-5">
+          <div className="font-mono text-[0.65rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)]">
+            International
+          </div>
+          <div className="font-mono tabular-nums text-3xl mt-2 text-[color:var(--ink)]">
+            {fmt.format(international)}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

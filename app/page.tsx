@@ -55,20 +55,61 @@ export default async function Landing() {
   const stats = await getStats(city);
 
   return (
-    <main className="min-h-screen bg-white">
+    <main className="min-h-screen relative overflow-hidden">
       <ReferralCapture />
-      <Hero />
-      <SocialProof
-        city={city}
-        cityCount={stats.cityCount}
-        totalCount={stats.total}
-      />
-      <CounterPlaceholder
-        total={stats.total}
-        india={stats.india}
-        international={stats.international}
-      />
-      <CityPreview cities={stats.topCities} />
+
+      {/* Broadcast header bar */}
+      <header className="border-b border-[color:var(--line)]">
+        <div className="mx-auto max-w-6xl px-6 py-4 flex items-center gap-4">
+          <span className="pulse-dot" aria-hidden />
+          <span className="font-mono text-[0.7rem] tracking-[0.22em] uppercase text-[color:var(--live)]">
+            On Air
+          </span>
+          <span className="text-[color:var(--ink-faint)]">|</span>
+          <span className="font-mono text-[0.72rem] tracking-[0.18em] uppercase text-[color:var(--ink)]">
+            Watch · Party
+          </span>
+          <span className="ml-auto font-mono text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)] hidden sm:inline">
+            Frequency · 108.0 FM
+          </span>
+        </div>
+      </header>
+
+      {/* Hero band */}
+      <section className="mx-auto max-w-6xl px-6 pt-16 pb-12 sm:pt-24 sm:pb-20 relative">
+        <div className="grid lg:grid-cols-[1.4fr_1fr] gap-12 lg:gap-20 items-start">
+          <div>
+            <Hero />
+            <SocialProof
+              city={city}
+              cityCount={stats.cityCount}
+              totalCount={stats.total}
+            />
+          </div>
+          <div className="lg:pt-4">
+            <CounterPlaceholder
+              total={stats.total}
+              india={stats.india}
+              international={stats.international}
+            />
+          </div>
+        </div>
+      </section>
+
+      {/* Cities ticker band */}
+      <section className="mx-auto max-w-6xl px-6 pb-24">
+        <CityPreview cities={stats.topCities} />
+      </section>
+
+      {/* Footer marker */}
+      <footer className="mx-auto max-w-6xl px-6 py-10 border-t border-[color:var(--line)] flex items-center justify-between">
+        <span className="font-mono text-[0.65rem] tracking-[0.24em] uppercase text-[color:var(--ink-mute)]">
+          End of broadcast · Loop in 0:00
+        </span>
+        <span className="font-mono text-[0.65rem] tracking-[0.24em] uppercase text-[color:var(--ink-mute)]">
+          Est. 2026
+        </span>
+      </footer>
     </main>
   );
 }
