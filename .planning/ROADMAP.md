@@ -28,7 +28,9 @@ The phases mirror the SPEC's "always-shippable" layered build priority. After ev
   2. The four tables (`signups`, `squads`, `squad_members`, `rooms`) exist in Supabase with the locked schema applied
   3. Pushing a trivial commit to `main` triggers a successful Vercel production deploy without manual steps
   4. Supabase URL + anon key are available to the app via environment variables on Vercel
-**Plans:** TBD
+**Plans:** 2 plans
+- [ ] 01-01-PLAN.md — Scaffold Next.js 15 + Supabase clients + migration SQL (autonomous)
+- [ ] 01-02-PLAN.md — Provision Supabase, push to GitHub, link Vercel, verify deploy (checkpoints)
 
 ### Phase 2: Landing & Signup
 **Goal:** A cold visitor — Indian or international — lands on `/`, completes the 3-field signup, and a row appears in `signups` with their detected city and (if present) referrer.
@@ -134,7 +136,7 @@ Hours are SPEC-provided guidance, not commitments. The 48-hour window includes s
 
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
-| 1. Scaffold & Deploy | 0/0 | Not started | - |
+| 1. Scaffold & Deploy | 0/2 | Not started | - |
 | 2. Landing & Signup | 0/0 | Not started | - |
 | 3. City Watch Room | 0/0 | Not started | - |
 | 4. WhatsApp Sharing & Referral | 0/0 | Not started | - |
