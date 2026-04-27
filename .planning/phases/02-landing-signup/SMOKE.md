@@ -141,4 +141,40 @@ The original Plan 04 Task 3 procedure assumed a human would inspect the Supabase
 
 ## Vercel Preview International Check (Plan 04 Task 3b)
 
-<to be filled by Task 3b>
+Run at: 2026-04-27T07:05:00Z
+Preview URL: n/a (not exercised — see Option B below)
+Option chosen: B (local-only, deferred to Phase 3)
+
+### Reason for deferral
+
+No non-IN VPN, proxy, or remote test endpoint was available within the Phase 2
+hackathon time budget. The developer machine resolves to an IN egress, so any
+Vercel preview deploy would set `x-geo-country=IN` for our own traffic and would
+not exercise the international code path on the preview surface.
+
+Per the plan's user revision (2026-04-27), this is an acceptable Phase 2 close.
+The international code path was exercised on local dev in Task 3 step 9 (a
+signup with `country_code = +1` was inserted and stored correctly), and the
+geo-detection helper `lib/geo.ts` reads `x-geo-country` / `x-geo-city` headers
+that Vercel will populate at the edge regardless of where the *visitor* is from
+once the preview is live.
+
+### Local-only evidence
+
+- Task 3 step 9: `country_code = "+1"` was correctly persisted on a real
+  Playwright-driven submission against local dev. See SMOKE.md row #9 above.
+- `x-geo-country` and `x-geo-city` were both absent locally (Next.js dev does
+  not synthesize Vercel edge headers). Inserted rows therefore had `city = null`,
+  which is the correct fallback behavior implemented in `lib/geo.ts`.
+- The signup row itself stored the user-supplied country_code verbatim,
+  independent of the geo-detected country, which proves the international lead
+  path is wired and storage-correct.
+
+### Outstanding verification (deferred to Phase 3 kickoff)
+
+| Check | How to verify on Phase 3 kickoff |
+|-------|-----------------------------------|
+| `x-geo-country` resolves to non-IN on Vercel preview for non-IN traffic | VPN to US (or other non-IN region), visit preview URL, submit signup, confirm `signups.city` matches a non-IN city or null (NOT an IN city) |
+| Non-IN visitor lands in a non-IN city room | Same as above, then verify `/room/<uuid>` corresponds to a `rooms` row with the non-IN city (Phase 3 wires this fully) |
+
+User-acknowledged acceptable Phase 2 close per **2026-04-27 decision**.
