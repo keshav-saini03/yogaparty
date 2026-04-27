@@ -99,3 +99,62 @@ export async function setRoomVideo(
   if (error) return { error: error.message };
   return { ok: true };
 }
+
+export type PublicRoomListing = {
+  id: string;
+  title: string;
+  city: string | null;
+  youtube_video_id: string | null;
+  created_at: string;
+  creator_id: string | null;
+};
+
+export async function listPublicRooms(limit = 50): Promise<PublicRoomListing[]> {
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from('rooms')
+    .select('id, title, city, youtube_video_id, created_at, creator_id')
+    .eq('is_active', true)
+    .not('title', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) {
+    console.error('listPublicRooms failed', error);
+    return [];
+  }
+  return (data ?? []) as PublicRoomListing[];
+}
+
+export type CreatePublicRoomResult =
+  | { ok: true; id: string }
+  | { error: string };
+
+export async function createPublicRoom(args: {
+  title: string;
+  creatorId: string;
+  city: string | null;
+}): Promise<CreatePublicRoomResult> {
+  const cleanTitle = args.title.trim();
+  if (cleanTitle.length === 0) return { error: 'Give your room a title.' };
+  if (cleanTitle.length > 80) return { error: 'Title must be 80 chars or fewer.' };
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from('rooms')
+    .insert({
+      type: 'city',
+      title: cleanTitle,
+      creator_id: args.creatorId,
+      city: normalizeCity(args.city),
+      is_active: true,
+      youtube_video_id: null,
+    })
+    .select('id')
+    .single();
+
+  if (error || !data) {
+    console.error('createPublicRoom failed', error);
+    return { error: 'Could not create room. Try again.' };
+  }
+  return { ok: true, id: data.id };
+}

@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import { Hero } from '@/components/landing/Hero';
 import { SocialProof } from '@/components/landing/SocialProof';
 import { CityPreview } from '@/components/landing/CityPreview';
@@ -69,9 +70,12 @@ export default async function Landing() {
           <span className="font-mono text-[0.72rem] tracking-[0.18em] uppercase text-[color:var(--ink)]">
             Watch · Party
           </span>
-          <span className="ml-auto font-mono text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)] hidden sm:inline">
-            Frequency · 108.0 FM
-          </span>
+          <Link
+            href="/rooms"
+            className="ml-auto font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)] hover:text-[color:var(--accent)] transition-colors"
+          >
+            Browse rooms →
+          </Link>
         </div>
       </header>
 

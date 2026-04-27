@@ -40,6 +40,13 @@ export function RoomHeader({
         >
           ← Watch · Party
         </Link>
+        <span className="text-[color:var(--ink-faint)] hidden sm:inline">|</span>
+        <Link
+          href="/rooms"
+          className="hidden sm:inline font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)] hover:text-[color:var(--accent)] transition-colors"
+        >
+          Browse
+        </Link>
 
         <div className="ml-auto flex items-center gap-2 sm:gap-3 flex-wrap">
           <span className="font-mono text-[0.62rem] sm:text-[0.7rem] tracking-[0.18em] uppercase text-[color:var(--ink-soft)]">
