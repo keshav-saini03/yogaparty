@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { SignupForm } from '@/components/signup/SignupForm';
 import { getDetectedCity } from '@/lib/geo';
 
@@ -76,7 +77,9 @@ export default async function SignupPage() {
                 Encrypted · Direct
               </span>
             </div>
-            <SignupForm detectedCity={city} />
+            <Suspense fallback={null}>
+              <SignupForm detectedCity={city} />
+            </Suspense>
           </div>
         </div>
       </section>

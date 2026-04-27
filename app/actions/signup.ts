@@ -1,38 +1,48 @@
 'use server';
 
+import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
+import { findOrCreateCityRoom } from '@/lib/rooms';
 import { getDetectedCity } from '@/lib/geo';
 import type { SignupState } from '@/lib/types';
-// Note: a 'use server' module may only export async functions per Next.js spec.
-// SignupState is the canonical type; clients should import it from '@/lib/types'.
-//
-// Plan 02-04 Task 3 deviation (2026-04-27): switched from the anon-key server
-// client to the service-role admin client. The Supabase project enabled RLS by
-// default on `signups`, blocking anon INSERT (postgres error 42501). Plan 02-02
-// SUMMARY.md flagged this exact pivot ("(a) move to the service-role client or
-// (b) add a permissive insert policy for `anon`"). Option (a) is chosen because
-// it requires zero DB schema changes and the admin client wrapper already
-// exists in lib/supabase/admin.ts. The service-role key is server-only and
-// never reaches the browser; this stays inside a 'use server' module.
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+const NEXT_PATH_RE = /^\/room\/[0-9a-f-]{36}$/i;
+
 const DUPLICATE_PHONE_FALLBACK_ERROR =
   "This number is already registered. Your seat is saved; watch-room details will arrive before we go live.";
+
+const SESSION_COOKIE = 'yp_session';
+const SESSION_MAX_AGE = 60 * 60 * 24 * 30;
+
+async function setSessionCookie(signupId: string) {
+  const c = await cookies();
+  c.set(SESSION_COOKIE, signupId, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
+    path: '/',
+    maxAge: SESSION_MAX_AGE,
+  });
+}
+
+function safeNextPath(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return NEXT_PATH_RE.test(value) ? value : null;
+}
 
 export async function createSignup(
   _prev: SignupState,
   formData: FormData
 ): Promise<SignupState> {
-  // Allowed formData reads: name, phone, country_code, referrer_id ONLY.
-  // City is server-authoritative — sourced from getDetectedCity() below.
   const name = (formData.get('name')?.toString() ?? '').trim();
   const phone = (formData.get('phone')?.toString() ?? '').trim();
-  const countryCode =
-    formData.get('country_code')?.toString() || '+91';
+  const countryCode = formData.get('country_code')?.toString() || '+91';
   const rawReferrer = formData.get('referrer_id')?.toString() ?? '';
+  const rawNext = formData.get('next')?.toString() ?? '';
 
   if (!name) {
     return { error: 'Please enter your name.' };
@@ -46,9 +56,7 @@ export async function createSignup(
     ? rawReferrer
     : null;
 
-  // Sole source of city. Client-supplied values are silently ignored.
   const city = await getDetectedCity();
-
   const supabase = createAdminClient();
 
   let { data, error } = await supabase
@@ -60,10 +68,9 @@ export async function createSignup(
       city,
       referrer_id: referrerId,
     })
-    .select('id')
+    .select('id, city')
     .single();
 
-  // FK violation on referrer_id (well-formed UUID but absent row) — retry once with null.
   if (error?.code === '23503' && referrerId !== null) {
     referrerId = null;
     const retry = await supabase
@@ -75,7 +82,7 @@ export async function createSignup(
         city,
         referrer_id: referrerId,
       })
-      .select('id')
+      .select('id, city')
       .single();
     data = retry.data;
     error = retry.error;
@@ -84,13 +91,15 @@ export async function createSignup(
   if (error?.code === '23505') {
     const existing = await supabase
       .from('signups')
-      .select('id')
+      .select('id, city')
       .eq('phone', phone)
       .maybeSingle();
 
     if (existing.data?.id) {
-      // Idempotent submit path: existing signup should land in the same room URL.
-      redirect(`/room/${existing.data.id}`);
+      const room = await findOrCreateCityRoom(existing.data.city ?? city);
+      await setSessionCookie(existing.data.id);
+      const next = safeNextPath(rawNext);
+      redirect(next ?? `/room/${room.id}`);
     }
 
     console.error('duplicate signup lookup failed', existing.error);
@@ -102,6 +111,8 @@ export async function createSignup(
     return { error: 'Something went wrong. Try again.' };
   }
 
-  // redirect() throws a control-flow signal — MUST be outside any try/catch.
-  redirect(`/room/${data.id}`);
+  const room = await findOrCreateCityRoom(data.city ?? city);
+  await setSessionCookie(data.id);
+  const next = safeNextPath(rawNext);
+  redirect(next ?? `/room/${room.id}`);
 }
