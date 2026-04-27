@@ -109,20 +109,69 @@ export type PublicRoomListing = {
   creator_id: string | null;
 };
 
+const ROOM_LISTING_TTL_MINUTES = 3;
+
 export async function listPublicRooms(limit = 50): Promise<PublicRoomListing[]> {
   const supabase = createAdminClient();
-  const { data, error } = await supabase
+  const cutoff = new Date(
+    Date.now() - ROOM_LISTING_TTL_MINUTES * 60_000
+  ).toISOString();
+
+  // Try the activity-aware query first. If the column doesn't exist yet
+  // (migration not applied), fall back to the legacy listing.
+  const recent = await supabase
+    .from('rooms')
+    .select('id, title, city, youtube_video_id, created_at, creator_id')
+    .eq('is_active', true)
+    .not('title', 'is', null)
+    .gte('last_active_at', cutoff)
+    .order('last_active_at', { ascending: false })
+    .limit(limit);
+
+  if (!recent.error) {
+    return (recent.data ?? []) as PublicRoomListing[];
+  }
+
+  console.warn(
+    'listPublicRooms TTL query failed, falling back',
+    recent.error.message
+  );
+  const fallback = await supabase
     .from('rooms')
     .select('id, title, city, youtube_video_id, created_at, creator_id')
     .eq('is_active', true)
     .not('title', 'is', null)
     .order('created_at', { ascending: false })
     .limit(limit);
-  if (error) {
-    console.error('listPublicRooms failed', error);
+
+  if (fallback.error) {
+    console.error('listPublicRooms fallback failed', fallback.error);
     return [];
   }
-  return (data ?? []) as PublicRoomListing[];
+  return (fallback.data ?? []) as PublicRoomListing[];
+}
+
+export type SplitPublicRooms = {
+  inYourCity: PublicRoomListing[];
+  elsewhere: PublicRoomListing[];
+};
+
+export function splitPublicRoomsByCity(
+  rooms: PublicRoomListing[],
+  yourCity: string | null
+): SplitPublicRooms {
+  const normalized =
+    yourCity && yourCity.trim().length > 0 ? yourCity.trim() : null;
+  if (!normalized || normalized === 'GLOBAL') {
+    return { inYourCity: [], elsewhere: rooms };
+  }
+  const inCity: PublicRoomListing[] = [];
+  const other: PublicRoomListing[] = [];
+  for (const r of rooms) {
+    if (r.city && r.city === normalized) inCity.push(r);
+    else other.push(r);
+  }
+  return { inYourCity: inCity, elsewhere: other };
 }
 
 export type CreatePublicRoomResult =

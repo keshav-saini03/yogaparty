@@ -13,6 +13,7 @@ vi.mock('@/lib/supabase/admin', () => ({
         const chain: Record<string, unknown> = {};
         chain.eq = () => chain;
         chain.not = () => chain;
+        chain.gte = () => chain;
         chain.order = () => chain;
         chain.limit = () => Promise.resolve(listResultRef);
         chain.maybeSingle = () => Promise.resolve({ data: null, error: null });
@@ -28,7 +29,12 @@ vi.mock('@/lib/supabase/admin', () => ({
   }),
 }));
 
-import { createPublicRoom, listPublicRooms } from './rooms';
+import {
+  createPublicRoom,
+  listPublicRooms,
+  splitPublicRoomsByCity,
+  type PublicRoomListing,
+} from './rooms';
 
 beforeEach(() => {
   listResultRef.data = [];
@@ -125,5 +131,56 @@ describe('createPublicRoom', () => {
       city: 'Mumbai',
     });
     expect(r).toEqual({ ok: true, id: 'rid' });
+  });
+});
+
+const mkRoom = (
+  id: string,
+  city: string | null,
+  title = 'Room ' + id
+): PublicRoomListing => ({
+  id,
+  title,
+  city,
+  youtube_video_id: null,
+  created_at: '2026-04-27T10:00:00Z',
+  creator_id: null,
+});
+
+describe('splitPublicRoomsByCity', () => {
+  const rooms = [
+    mkRoom('a', 'Mumbai'),
+    mkRoom('b', 'Delhi'),
+    mkRoom('c', 'Mumbai'),
+    mkRoom('d', null),
+  ];
+
+  it('puts rooms matching the viewer city into inYourCity', () => {
+    const r = splitPublicRoomsByCity(rooms, 'Mumbai');
+    expect(r.inYourCity.map((x) => x.id)).toEqual(['a', 'c']);
+    expect(r.elsewhere.map((x) => x.id)).toEqual(['b', 'd']);
+  });
+
+  it('returns everything in elsewhere when viewerCity is null', () => {
+    const r = splitPublicRoomsByCity(rooms, null);
+    expect(r.inYourCity).toEqual([]);
+    expect(r.elsewhere).toEqual(rooms);
+  });
+
+  it('returns everything in elsewhere when viewerCity is GLOBAL', () => {
+    const r = splitPublicRoomsByCity(rooms, 'GLOBAL');
+    expect(r.inYourCity).toEqual([]);
+    expect(r.elsewhere).toEqual(rooms);
+  });
+
+  it('treats whitespace-only as no city', () => {
+    const r = splitPublicRoomsByCity(rooms, '   ');
+    expect(r.inYourCity).toEqual([]);
+  });
+
+  it('does not match a room whose city is null', () => {
+    const r = splitPublicRoomsByCity(rooms, 'Pune');
+    expect(r.inYourCity).toEqual([]);
+    expect(r.elsewhere).toEqual(rooms);
   });
 });

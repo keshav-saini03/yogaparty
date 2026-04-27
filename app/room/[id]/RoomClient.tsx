@@ -13,6 +13,7 @@ import { useRoomSync } from '@/hooks/useRoomSync';
 import type { ChatMsg } from '@/lib/room-types';
 import { CURATED_VIDEOS } from '@/lib/videos';
 import { pickVideo } from '@/app/actions/pick-video';
+import { bumpRoomActivity, closeRoomIfStale } from '@/app/actions/room-activity';
 import { WhatsAppShareButton } from '@/components/share/WhatsAppShareButton';
 import { postSignupCopy } from '@/lib/whatsapp';
 import {
@@ -178,8 +179,23 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       ch.untrack().catch(() => {});
       ch.unsubscribe().catch(() => {});
       sb.removeChannel(ch);
+      // Best-effort: ask the server to soft-delete this room if nobody else
+      // bumped activity recently (>90s). No-op for auto-city rooms (which
+      // have title IS NULL). Fire-and-forget; ignore failures.
+      closeRoomIfStale(roomId).catch(() => {});
     };
   }, [roomId, self.user_id, self.name, self.city]);
+
+  // Activity bump: mark this room "alive" on mount and every 60s while open.
+  // Powers the /rooms directory TTL filter (rooms quiet for >3 min vanish).
+  useEffect(() => {
+    if (!isReady) return;
+    bumpRoomActivity(roomId).catch(() => {});
+    const id = window.setInterval(() => {
+      bumpRoomActivity(roomId).catch(() => {});
+    }, 60_000);
+    return () => window.clearInterval(id);
+  }, [roomId, isReady]);
 
   // Heartbeat ticker — every client sends `heartbeat` every 5s. The host
   // listens (registered above) and emits sync_correct on drift > 2s. The
