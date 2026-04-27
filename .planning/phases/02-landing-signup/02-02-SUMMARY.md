@@ -32,7 +32,7 @@ decisions:
   - "Allowed formData reads are exactly four: name, phone, country_code, referrer_id — anything else is silently ignored"
   - "FK violation on referrer_id retries once with null instead of pre-querying signups (avoids round-trip; matches RESEARCH Topic 3)"
   - "Phone validation is regex-only (/^\\d{6,15}$/) — no zod/yup, two if-statements suffice"
-  - "Duplicate-phone error string is the verbatim CONTEXT.md copy: \"This number is already in! Check your messages — you're already part of YogaParty.\""
+  - "Duplicate-phone error string is the verbatim CONTEXT.md copy: \"This number is already in! Check your messages — you're already tuned in.\""
   - "console.error logs only the error object — never form data — to satisfy T-02-07"
 metrics:
   duration_minutes: 3

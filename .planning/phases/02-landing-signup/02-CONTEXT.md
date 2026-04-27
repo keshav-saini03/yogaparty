@@ -46,7 +46,7 @@ Convert a cold visitor into a `signups` row. After this phase, the hackathon's p
 - **Country code dropdown**: defaults to `+91`. Must include common international codes (US +1, UK +44, UAE +971, Canada +1, Australia +61, Singapore +65, Saudi Arabia +966, Germany +49 — at least these 8 + India)
 - **Detected city is server-authoritative** — read from Vercel Edge `x-geo-city` header in the server action. Display informationally on the form ("Joining from: {city}") but do NOT make it user-editable. Rationale: hackathon scope reduction (saves build time), prevents leaderboard-gaming, and Vercel geolocation is reliable enough for >99% of users. This softens REQ-SIGNUP's "and editable" criterion — documented as a deliberate Phase 2 deviation.
 - **Phone uniqueness enforced** at the database level (already in schema as `UNIQUE`)
-  - On duplicate, surface friendly error: "This number is already in! Check your messages — you're already part of YogaParty."
+  - On duplicate, surface friendly error: "This number is already in! Check your messages — you're already tuned in."
 - **No password, no OTP, no email** (explicit per CONTEXT/CONSTRAINTS)
 - **Referral attribution**: read `?ref=<userId>` on landing → store in localStorage → apply at signup as `signups.referrer_id`
 

@@ -20,7 +20,7 @@ const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const DUPLICATE_PHONE_ERROR =
-  "This number is already in! Check your messages — you're already part of YogaParty.";
+  "This number is already in! Check your messages — you're already tuned in.";
 
 export async function createSignup(
   _prev: SignupState,

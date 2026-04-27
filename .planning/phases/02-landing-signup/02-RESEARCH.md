@@ -30,7 +30,7 @@ Phase 1 already locked the stack and shipped `lib/supabase/server.ts` and `middl
 - Three fields ONLY: Name, Phone (digits only, separate from country code), Country Code dropdown
 - Country code default `+91`. Minimum 9 codes: India, US/Canada (+1), UK (+44), UAE (+971), Singapore (+65), Australia (+61), Saudi Arabia (+966), Germany (+49), France (+33)
 - Detected city pre-filled (hidden field or visible "Joining from: {city}" with edit affordance)
-- Phone uniqueness enforced at DB level — duplicate surfaces friendly error: "This number is already in! Check your messages — you're already part of YogaParty."
+- Phone uniqueness enforced at DB level — duplicate surfaces friendly error: "This number is already in! Check your messages — you're already tuned in."
 - No password, no OTP, no email — ever
 - Referral: read `?ref=<userId>` on landing → localStorage → hidden field on signup → `signups.referrer_id`
 - On success redirect to `/room/[id]` (Phase 3 placeholder route)
@@ -118,7 +118,7 @@ export async function createSignup(
   if (error?.code === '23505') {
     return {
       error:
-        "This number is already in! Check your messages — you're already part of YogaParty.",
+        "This number is already in! Check your messages — you're already tuned in.",
     };
   }
   if (error || !data) return { error: 'Something went wrong. Try again.' };
@@ -554,7 +554,7 @@ export async function createSignup(
   if (error?.code === '23505') {
     return {
       error:
-        "This number is already in! Check your messages — you're already part of YogaParty.",
+        "This number is already in! Check your messages — you're already tuned in.",
     };
   }
   if (error || !data) {
