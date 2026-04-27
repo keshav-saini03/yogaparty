@@ -2,6 +2,10 @@
 
 All requirements are **v1** — there is no v2 in a 48-hour hackathon. The "fallback if behind" cut line is P0–P3 (REQ-INFRA, REQ-LANDING, REQ-SIGNUP, REQ-CITY-ROOM, REQ-ROOM-SYNC, REQ-CHAT, REQ-PRESENCE, REQ-WHATSAPP-SHARE, REQ-REFERRAL, REQ-CONTENT-LIST). Phases 5–7 are multipliers.
 
+**Scope pivot 2026-04-27 (post-Phase-3):** REQ-SQUAD-ROOM is dropped. Phase 6 now delivers two replacement requirements:
+- REQ-ROOM-SHARDING (multiple city rooms with a 7-person cap, signup-time assignment via `signups.room_id`)
+- REQ-WEBRTC-CALL (peer-mesh audio + video overlay inside the watch room)
+
 Each requirement has acceptance criteria written as observable behaviors. Source: `.planning/intel/requirements.md` plus an explicitly-added INFRA requirement to cover P0 scaffolding work the SPEC implies but did not name.
 
 ---
@@ -145,17 +149,31 @@ Each requirement has acceptance criteria written as observable behaviors. Source
 
 ---
 
-## Category: Squads
+## Category: Sharded city rooms + WebRTC
 
-### REQ-SQUAD-ROOM — Private squad watch room
-- **Description:** A user creates a named squad with a WhatsApp invite link; the squad gets its own private room.
+### REQ-ROOM-SHARDING — Multiple city rooms with cap
+- **Description:** Each city has many rooms; each room caps at 7 participants. Signup assigns the user to the first non-full room (or creates a new one).
 - **Acceptance:**
-  - User can create a squad from `/squad`, providing a name → row in `squads` with unique `invite_code`
-  - WhatsApp invite link uses `/join/{inviteCode}`
-  - Joining via the link adds a `squad_members` row and lands the joiner in the squad's private `rooms` row (`type = 'squad'`)
-  - Persistent "squad incomplete" banner shown until member count ≥ 3
-  - Squad room shows member list with status (joined / not joined yet for invitees if surfaced)
-- **Source:** REQ-squad-room
+  - `signups.room_id` column exists (UUID FK to `rooms.id`, nullable for backfill)
+  - `rooms.shard_index` and `rooms.participant_cap` columns exist (defaults: shard_index = next per city, cap = 7)
+  - `findOrCreateCityRoom(city)` returns the first active room for that city with `< participant_cap` assigned signups, ordered by `shard_index ASC`; if all full or none exist, creates a new room with `shard_index = MAX(shard_index)+1`
+  - Existing signups (Phase 2 era) get backfilled with a room_id at migration time
+  - Cap is enforced at signup-time, not presence-time (deterministic, no race conditions)
+- **Source:** D-016 (scope pivot 2026-04-27 — replaces squad rooms)
+
+### REQ-WEBRTC-CALL — In-room WebRTC voice + video overlay
+- **Description:** Participants in a watch room can opt into a peer-mesh audio + video call. The yoga session keeps playing; the call is a floating overlay.
+- **Acceptance:**
+  - Floating overlay component on `/room/[id]` with "Start mic" / "Start camera" buttons; off by default for every participant on join
+  - Once enabled, peer-mesh: each calling participant connects to every other calling participant (max 7 in the room ⇒ ≤ 6 peer connections per client)
+  - Signaling rides on the existing Supabase Realtime channel `room:{roomId}` via events `webrtc_offer`, `webrtc_answer`, `webrtc_ice`, `webrtc_call_end`
+  - STUN-only via Google public servers (`stun:stun.l.google.com:19302`); no TURN, no SFU
+  - Each peer's local stream is shown muted (avoid self-echo); each remote stream is rendered with controls to mute that peer locally
+  - Tile grid: 1×1, 1×2, 2×2, 2×3, 2×4 layouts depending on calling-participant count
+  - Mic/camera toggles broadcast a `webrtc_call_end` when both are off and tear down peer connections cleanly
+  - On tab close / unmount, all RTCPeerConnections are closed; remote peers receive `webrtc_call_end` and remove the dropped tile
+  - Documented limitation: symmetric-NAT users (~10-15%) may fail to connect with no TURN — surface a "Couldn't connect" status per peer instead of a hard error
+- **Source:** D-017 (scope pivot 2026-04-27)
 
 ---
 
@@ -196,10 +214,11 @@ Each requirement has acceptance criteria written as observable behaviors. Source
 | REQ-REFERRAL | Phase 4 | Pending |
 | REQ-LEADERBOARD | Phase 5 | Pending |
 | REQ-LIVE-COUNTER | Phase 5 | Pending |
-| REQ-SQUAD-ROOM | Phase 6 | Pending |
+| REQ-ROOM-SHARDING | Phase 6 | Pending |
+| REQ-WEBRTC-CALL | Phase 6 | Pending |
 | REQ-REACTIONS | Phase 7 | Pending |
 | REQ-POLISH-MOBILE | Phase 7 | Pending |
 
-**Coverage:** 16 / 16 v1 requirements mapped to exactly one phase. No orphans, no duplicates.
+**Coverage:** 17 / 17 v1 requirements mapped to exactly one phase (REQ-SQUAD-ROOM dropped 2026-04-27, REQ-ROOM-SHARDING + REQ-WEBRTC-CALL added). No orphans, no duplicates.
 
 > Note on REQ-LIVE-COUNTER placement: the live counter is a landing-page element (Phase 2 page), but it depends on having signup volume + a real-time aggregate, and ships alongside the leaderboard as part of the "competition engine" (P4). Implementing it in Phase 5 keeps Phase 2 ship-light (a static counter or zero-state placeholder is sufficient until Phase 5 wires the realtime aggregate). This matches the SPEC's P1 vs P4 split.

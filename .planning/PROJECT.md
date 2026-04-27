@@ -55,7 +55,9 @@ These are stack/scope choices treated as **locked** for the duration of the hack
 - **D-008 — First joiner is host.** Host transfers to next person on leave. Only host can play/pause/seek.
 - **D-009 — Sync algorithm:** host broadcasts `sync_play | sync_pause | sync_seek`; clients send `heartbeat { currentTime }` every 5s; host sends `sync_correct` to a single client when drift > 2s.
 - **D-010 — Pre-curated Habuild video list.** Host picks from list; no free-form URL input.
-- **D-013 — Two room types:** public `city` rooms (auto-created) and private `squad` rooms (user-created).
+- **D-013 — One room type:** public `city` rooms only. Squad rooms removed from v1 scope (2026-04-27 pivot).
+- **D-016 — Sharded city rooms, max 7 participants/room.** A city has many rooms; each capped at 7. `findOrCreateCityRoom(city)` returns the first non-full active city room, else creates a new one. Sharding is signup-time (assigned via `signups.room_id`), not presence-time, so it's race-deterministic and doesn't require live presence counting on the server.
+- **D-017 — Audio + video calls over WebRTC peer mesh.** Each participant connects directly to every other (mesh, N≤7 = 6 peer connections per client). Supabase Realtime channel carries the signaling (offer / answer / ICE). STUN-only via Google public servers (no TURN, no SFU, no paid services). Video on the watch room is presented as a floating overlay; mic/camera off by default per participant.
 
 ### Virality
 
@@ -67,7 +69,9 @@ These are stack/scope choices treated as **locked** for the duration of the hack
 - **D-014 — No admin panel.** Use the Supabase dashboard for ops.
 - **D-015 — No i18n framework.** Hinglish copy hardcoded.
 - No personality quiz / archetypes.
-- No WebRTC voice/video. Chat is sufficient.
+- No squad rooms (revised 2026-04-27 — squad rooms dropped, replaced by sharded city rooms + WebRTC calls).
+- No SFU / managed video service (LiveKit, Daily, Agora). Free-tier peer-mesh only.
+- No TURN servers in v1. Symmetric-NAT users (~10-15%) may fail to establish a call connection — accepted hackathon risk.
 - No video queue. Host picks one video.
 - No typing indicators, no @mentions, no screen share.
 
@@ -107,34 +111,23 @@ CREATE TABLE signups (
   country_code TEXT NOT NULL DEFAULT '+91',
   city TEXT,
   referrer_id UUID REFERENCES signups(id),
+  room_id UUID REFERENCES rooms(id), -- assigned at signup; sharding key (D-016)
   created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE squads (
-  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  name TEXT NOT NULL,
-  creator_id UUID REFERENCES signups(id) NOT NULL,
-  invite_code TEXT UNIQUE NOT NULL,
-  city TEXT,
-  created_at TIMESTAMPTZ DEFAULT now()
-);
-
-CREATE TABLE squad_members (
-  squad_id UUID REFERENCES squads(id) NOT NULL,
-  signup_id UUID REFERENCES signups(id) NOT NULL,
-  joined_at TIMESTAMPTZ DEFAULT now(),
-  PRIMARY KEY (squad_id, signup_id)
 );
 
 CREATE TABLE rooms (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  type TEXT NOT NULL DEFAULT 'city', -- 'city' or 'squad'
+  type TEXT NOT NULL DEFAULT 'city', -- 'city' (only type in v1)
   city TEXT,
-  squad_id UUID REFERENCES squads(id),
+  shard_index INT NOT NULL DEFAULT 1, -- 1, 2, 3… per city (D-016)
+  participant_cap INT NOT NULL DEFAULT 7, -- D-016
   youtube_video_id TEXT,
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- squads / squad_members tables removed 2026-04-27 (D-013 revised).
+-- Migration `0002_remove_squads_add_sharding.sql` ships in Phase 6.
 ```
 
 ## Realtime Protocol (Locked)
@@ -147,14 +140,16 @@ CREATE TABLE rooms (
   - `sync_correct` — Host → Client — `{ timestamp }` when drift > 2s (C-008)
   - `chat` — Any → All — `{ user, text, timestamp }`
   - `reaction` — Any → All — `{ user, emoji }`
+  - `webrtc_offer` — A → B — `{ from, to, sdp }` (D-017)
+  - `webrtc_answer` — B → A — `{ from, to, sdp }` (D-017)
+  - `webrtc_ice` — Any → Specific — `{ from, to, candidate }` (D-017)
+  - `webrtc_call_end` — Any → All — `{ from }` when leaving the call mesh (D-017)
 
 ## Pages Inventory
 
 - `/` Landing (live counter, top-5 cities, social proof, CTA)
 - `/signup` 3-field signup
-- `/room/[id]` Watch room (YouTube + chat + presence + invite + reactions)
-- `/squad` Create private watch party
-- `/join/[inviteCode]` Squad invite landing
+- `/room/[id]` Watch room (YouTube + chat + presence + invite + reactions + WebRTC overlay)
 - `/leaderboard` City + referrer rankings
 
 ## Sources

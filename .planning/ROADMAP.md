@@ -3,7 +3,7 @@
 **Milestone:** Hackathon MVP (single milestone — all 7 phases roll up)
 **Window:** Mon Apr 27 09:00 → Tue Apr 28 21:00, 2026 (48 hours)
 **Granularity:** Standard (7 phases mirroring the SPEC's P0–P6 layered priority)
-**Coverage:** 16 / 16 v1 requirements mapped
+**Coverage:** 17 / 17 v1 requirements mapped
 
 The phases mirror the SPEC's "always-shippable" layered build priority. After every phase, `main` is in a deployable, demo-able state. The fallback cut line is end-of-Phase 4 (≈ P3 in the SPEC), which still represents a complete product: "watch together + invite friends."
 
@@ -14,7 +14,7 @@ The phases mirror the SPEC's "always-shippable" layered build priority. After ev
 - [ ] **Phase 3: City Watch Room** — Synced YouTube + chat + presence in a city-scoped room
 - [ ] **Phase 4: WhatsApp Sharing & Referral** — Every signup can invite friends; referrals attribute correctly
 - [ ] **Phase 5: Competition Engine** — City leaderboard + live signup counter drive city-vs-city virality
-- [ ] **Phase 6: Squad Rooms** — Private friend-group watch parties with WhatsApp invites
+- [ ] **Phase 6: Sharded Rooms + WebRTC** — Cap city rooms at 7 with sharding; add peer-mesh audio + video overlay (replaces squad rooms 2026-04-27)
 - [ ] **Phase 7: Polish & Reactions** — Emoji reactions, mobile-first sweep, share prompts everywhere
 
 ## Phase Details
@@ -90,15 +90,18 @@ The phases mirror the SPEC's "always-shippable" layered build priority. After ev
 **Plans:** TBD
 **UI hint**: yes
 
-### Phase 6: Squad Rooms
-**Goal:** A user can create a named private squad, share a WhatsApp invite link, and watch with friends in a private room — adding a second viral loop on top of the city loop.
+### Phase 6: Sharded Rooms + WebRTC
+**Goal:** Cap city rooms at 7 participants by sharding (multiple rooms per city, signup-time assignment), and add a floating WebRTC peer-mesh overlay on the watch room so participants can opt into voice + video while the yoga session plays.
 **Depends on:** Phase 5
-**Requirements:** REQ-SQUAD-ROOM
+**Requirements:** REQ-ROOM-SHARDING, REQ-WEBRTC-CALL
 **Success Criteria** (what must be TRUE):
-  1. A signed-up user can name a squad on `/squad`, get a `wa.me` link containing `/join/{inviteCode}`, and share it
-  2. Tapping a `/join/{inviteCode}` link routes a recipient through signup (if needed) and lands them in that squad's private room with a `squad_members` row created
-  3. The squad room shows a persistent "squad incomplete" banner until member count ≥ 3, and the banner disappears once the threshold is met
-  4. Members see the live member list inside the squad room and can use sync + chat exactly as in city rooms
+  1. Schema migration `0002_remove_squads_add_sharding.sql` drops `squads` + `squad_members`, adds `signups.room_id` (UUID FK), adds `rooms.shard_index INT` + `rooms.participant_cap INT DEFAULT 7`, backfills existing signups with a room_id
+  2. Two test signups in the same city land in the same `rooms` row up to the 7th signup; the 8th creates a new room with `shard_index = 2`
+  3. Inside `/room/[id]`, a "Start mic" button lights up a floating overlay with the user's local audio (muted to self), and any other participant who taps "Start mic" gets a peer connection — both can hear each other
+  4. "Start camera" adds a video tile to the overlay grid; the grid layout adapts at 1, 2, 3, 4, 5, 6, 7 calling participants
+  5. Closing a tab tears down all RTCPeerConnections and broadcasts `webrtc_call_end`; remaining peers see the dropped tile disappear within 2s
+  6. Symmetric-NAT failure surfaces as "Couldn't connect" per peer — never as a hard error or page crash
+  7. The yoga playback continues uninterrupted while the call is active (sync events still mirror across the room)
 **Plans:** TBD
 **UI hint**: yes
 
@@ -109,7 +112,7 @@ The phases mirror the SPEC's "always-shippable" layered build priority. After ev
 **Success Criteria** (what must be TRUE):
   1. Inside any room, tapping any of at least four emoji broadcasts a `reaction` event and renders a visible animated reaction on every other client in the room
   2. Each viral moment screen — post-signup, in-room, leaderboard, post-session — surfaces a WhatsApp share prompt without the user hunting for it
-  3. At 360px width every page (`/`, `/signup`, `/room/[id]`, `/squad`, `/join/[code]`, `/leaderboard`) renders without horizontal scroll and primary CTAs have ≥ 44px tap targets
+  3. At 360px width every page (`/`, `/signup`, `/room/[id]`, `/leaderboard`) renders without horizontal scroll and primary CTAs have ≥ 44px tap targets
   4. The Phase 4 fallback ship line is preserved: removing Phase 7 from the build leaves the product fully functional (no Phase 7 code is on a critical path)
 **Plans:** TBD
 **UI hint**: yes
@@ -122,7 +125,7 @@ Phase 1 (Scaffold)
           └─ Phase 3 (City Watch Room)
                  └─ Phase 4 (WhatsApp & Referral)   ← FALLBACK SHIP LINE
                         └─ Phase 5 (Competition Engine)
-                               └─ Phase 6 (Squad Rooms)
+                               └─ Phase 6 (Sharded Rooms + WebRTC)
                                       └─ Phase 7 (Polish & Reactions)
 ```
 
@@ -151,7 +154,7 @@ Hours are SPEC-provided guidance, not commitments. The 48-hour window includes s
 | 3. City Watch Room | 0/6 | Not started | - |
 | 4. WhatsApp Sharing & Referral | 0/0 | Not started | - |
 | 5. Competition Engine | 0/0 | Not started | - |
-| 6. Squad Rooms | 0/0 | Not started | - |
+| 6. Sharded Rooms + WebRTC | 0/0 | Not started | - |
 | 7. Polish & Reactions | 0/0 | Not started | - |
 
 ## Coverage Validation
@@ -171,8 +174,9 @@ Hours are SPEC-provided guidance, not commitments. The 48-hour window includes s
 | REQ-REFERRAL | 4 |
 | REQ-LEADERBOARD | 5 |
 | REQ-LIVE-COUNTER | 5 |
-| REQ-SQUAD-ROOM | 6 |
+| REQ-ROOM-SHARDING | 6 |
+| REQ-WEBRTC-CALL | 6 |
 | REQ-REACTIONS | 7 |
 | REQ-POLISH-MOBILE | 7 |
 
-16 / 16 v1 requirements mapped. No orphans. No duplicates.
+17 / 17 v1 requirements mapped. No orphans. No duplicates.
