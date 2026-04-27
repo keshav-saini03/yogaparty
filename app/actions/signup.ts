@@ -4,8 +4,8 @@ import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { getDetectedCity } from '@/lib/geo';
 import type { SignupState } from '@/lib/types';
-
-export type { SignupState };
+// Note: a 'use server' module may only export async functions per Next.js spec.
+// SignupState is the canonical type; clients should import it from '@/lib/types'.
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
