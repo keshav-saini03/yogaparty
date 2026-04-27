@@ -20,7 +20,7 @@ Phase 1 already locked the stack and shipped `lib/supabase/server.ts` and `middl
 ### Locked Decisions
 
 **Landing**
-- Hero copy verbatim: "Watch yoga together with people near you"
+- Hero copy verbatim: "Watch together with people near you" (revised 2026-04-27 — brand-neutral, no "yoga" or "Habuild" on landing)
 - Single CTA "Join a Watch Party" → `/signup`
 - Social proof line "X people from {city} watching"; `0 → "Be the first from {city}"`; no city → "X people watching"
 - Top-5 cities preview from `signups` aggregate

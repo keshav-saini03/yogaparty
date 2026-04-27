@@ -32,7 +32,8 @@ Convert a cold visitor into a `signups` row. After this phase, the hackathon's p
 ## Implementation Decisions
 
 ### Landing Page Layout (LOCKED)
-- **Hero copy** (verbatim): "Watch yoga together with people near you"
+- **Hero copy** (verbatim): "Watch together with people near you"
+- **Subhead**: keep brand-neutral and content-agnostic — do NOT mention "yoga" or "Habuild" on the landing. The actual content (Habuild yoga sessions) is revealed only inside rooms after signup. Suggested subhead: "Live sessions with your city. Synced. Together."
 - **Single primary CTA**: "Join a Watch Party" → routes to `/signup`
 - **Social proof line**: "X people from {city} watching" — uses detected city
   - When 0 signups for that city: show "Be the first from {city}"
@@ -43,7 +44,7 @@ Convert a cold visitor into a `signups` row. After this phase, the hackathon's p
 ### Signup Form (LOCKED)
 - **Three fields ONLY**: Name, Phone (number only, separate from country code), Country Code (dropdown)
 - **Country code dropdown**: defaults to `+91`. Must include common international codes (US +1, UK +44, UAE +971, Canada +1, Australia +61, Singapore +65, Saudi Arabia +966, Germany +49 — at least these 8 + India)
-- **Detected city pre-filled** in a hidden field (or visible label "Joining from: {city}" with a small "wrong?" link to edit)
+- **Detected city is server-authoritative** — read from Vercel Edge `x-geo-city` header in the server action. Display informationally on the form ("Joining from: {city}") but do NOT make it user-editable. Rationale: hackathon scope reduction (saves build time), prevents leaderboard-gaming, and Vercel geolocation is reliable enough for >99% of users. This softens REQ-SIGNUP's "and editable" criterion — documented as a deliberate Phase 2 deviation.
 - **Phone uniqueness enforced** at the database level (already in schema as `UNIQUE`)
   - On duplicate, surface friendly error: "This number is already in! Check your messages — you're already part of YogaParty."
 - **No password, no OTP, no email** (explicit per CONTEXT/CONSTRAINTS)
@@ -71,7 +72,7 @@ Convert a cold visitor into a `signups` row. After this phase, the hackathon's p
 - No external script tags (no analytics yet, no fonts beyond system stack — Tailwind v4 default is fine)
 
 ### UX Decisions
-- **Hinglish copy okay** — but the hero copy is locked English ("Watch yoga together with people near you"). Supporting copy can be Hinglish where it fits.
+- **Hinglish copy okay** — but the hero copy is locked English ("Watch together with people near you"). Supporting copy can be Hinglish where it fits, but landing must remain brand-neutral (no "yoga", no "Habuild").
 - **No login state** — every visitor sees the same landing. Returning users still see the signup form (we don't try to remember them).
 - **Loading states** — disable the CTA during signup submit; show "Joining..." text.
 

@@ -23,9 +23,9 @@ Each requirement has acceptance criteria written as observable behaviors. Source
 ## Category: Landing & Signup
 
 ### REQ-LANDING — Public landing page
-- **Description:** Mobile-first landing page that converts cold visitors into the signup flow.
+- **Description:** Mobile-first landing page that converts cold visitors into the signup flow. Brand-neutral and content-agnostic — do not mention "yoga" or "Habuild" on the landing (revised 2026-04-27 to broaden top-of-funnel reach).
 - **Acceptance:**
-  - Hero copy "Watch yoga together with people near you"
+  - Hero copy "Watch together with people near you"
   - Single CTA "Join a Watch Party" routes to `/signup`
   - Visitor sees social proof line "X people from {city} watching" using their detected city
   - Top-5 cities preview rendered from `signups` aggregate
@@ -36,7 +36,7 @@ Each requirement has acceptance criteria written as observable behaviors. Source
 - **Description:** Single-screen signup capturing the hackathon-deliverable lead.
 - **Acceptance:**
   - Form fields: Name, Phone, Country Code dropdown (default `+91`, all codes available)
-  - Detected city pre-filled and editable
+  - Detected city pre-filled (read server-side from Vercel Edge `x-geo-city` header). City is **server-authoritative for hackathon scope** — not user-editable. (Revised 2026-04-27: editability dropped per Phase 2 deviation to save build time and prevent leaderboard-gaming.)
   - `?ref={userId}` from landing applied as `signups.referrer_id` if present in localStorage
   - No OTP, no password, no email field
   - Phone uniqueness enforced; duplicate-phone signups surface a friendly error

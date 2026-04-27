@@ -41,7 +41,11 @@ The phases mirror the SPEC's "always-shippable" layered build priority. After ev
   2. A visitor can submit Name + Phone + Country Code on `/signup` with no OTP / password / email field, and a row lands in `signups` with their detected city
   3. A visitor with a non-`+91` country code can complete signup, has a non-IN city detected, and is redirected to that international city's room
   4. Submitting with an already-used phone number shows a friendly duplicate error instead of a 500
-**Plans:** TBD
+**Plans:** 4 plans
+- [ ] 02-01-PLAN.md — Foundations: lib/geo, lib/types, lib/country-codes, room placeholder (Wave 1)
+- [ ] 02-02-PLAN.md — Server action createSignup with 23505/23503 handling (Wave 2)
+- [ ] 02-03-PLAN.md — Landing page + 5 components (Hero, SocialProof, CityPreview, CounterPlaceholder, ReferralCapture) (Wave 2, parallel with 02-02)
+- [ ] 02-04-PLAN.md — Signup form, signup page, smoke test, bundle audit (Wave 3, has checkpoint)
 **UI hint**: yes
 
 ### Phase 3: City Watch Room
@@ -137,7 +141,7 @@ Hours are SPEC-provided guidance, not commitments. The 48-hour window includes s
 | Phase | Plans Complete | Status | Completed |
 |---|---|---|---|
 | 1. Scaffold & Deploy | 0/2 | Not started | - |
-| 2. Landing & Signup | 0/0 | Not started | - |
+| 2. Landing & Signup | 0/4 | Not started | - |
 | 3. City Watch Room | 0/0 | Not started | - |
 | 4. WhatsApp Sharing & Referral | 0/0 | Not started | - |
 | 5. Competition Engine | 0/0 | Not started | - |
