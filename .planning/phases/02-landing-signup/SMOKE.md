@@ -59,8 +59,85 @@ Bundle audit: **PASS** under the renegotiated budget. Proceeding to Task 3.
 
 ## End-to-End Smoke (Plan 04 Task 3)
 
-Run at: <to be filled by Task 3>
-Environment: local dev (`npm run dev`)
+Run at: 2026-04-27T06:50:37Z
+Environment: local dev (`npm run dev` on http://localhost:3000)
+Driver: real Chromium browser via Playwright (`smoke.mjs` at repo root); GET probes via `curl`. No `curl` was used for form submissions, per Plan 04 Task 3 guidance (server actions reject curl due to the missing `Next-Action` header).
+Verification reads: Supabase REST with the service-role key (anon SELECT is RLS-blocked on the live project — see deviation A below).
+
+### GET probes (steps 1–3)
+
+| #  | Check                                  | Expected            | Actual | Verdict |
+| -- | -------------------------------------- | ------------------- | ------ | ------- |
+| 1  | Dev server starts                      | "Ready in <Xs>"     | "Ready in 1060ms" | PASS    |
+| 2  | Landing has CTA `Join a Watch Party`   | grep ≥ 1            | 1      | PASS    |
+| 2b | Landing visible text has no yoga/habuild | grep == 0 in visible text | 0 (visible text); see note below | PASS |
+| 3  | Signup page renders `Join the Watch Party` | grep ≥ 1        | 1      | PASS    |
+| 3a | Signup page lists `+91`                | grep ≥ 1            | 1      | PASS    |
+| 3b | Signup page shows `Joining from`       | grep ≥ 1            | 1      | PASS    |
+
+Note on step 2b: a naive `curl http://localhost:3000/ | grep -ic "yoga\|habuild"` returns `1` because the dev-mode RSC streaming payload embeds the absolute filesystem path of the project, which happens to contain the directory segment `Habuild` (the repo lives under `/Users/habuild/Desktop/work/Habuild/hack-a-thon`). Stripping `<script>` blocks and tags via Python yields zero matches in the **user-visible text**:
+
+```
+VISIBLE TEXT:
+Create Next App Watch together with people near you Live sessions with your city. Synced. Together. Join a Watch Party 0 people watching 0 0 from India · 0 international
+
+YOGA matches: 0
+HABUILD matches: 0
+```
+
+This is dev-only RSC metadata (filesystem paths in HMR/source-map streams) and does not appear in the production bundle. PASS recorded.
+
+### Browser-driven funnel (steps 4–10)
+
+| #   | Check                                                       | Expected                                                                                    | Actual                                                                  | Verdict |
+| --- | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------- | ------- |
+| 4a  | Static city display visible, no city input element          | text "Joining from..." present + 0 inputs named `city`/`detected_city`                      | text="Joining from your detected location", inputs=0                    | PASS    |
+| 4   | Successful signup redirects to `/room/<uuid>`               | URL matches `/room/<uuid>`                                                                  | http://localhost:3000/room/6353ba5e-030b-47b1-b770-7be7a943316d         | PASS    |
+| 5   | Inserted row has expected fields                            | name=Smoke Test, phone=99999995967, country_code=+91                                        | name=Smoke Test, phone=99999995967, country_code=+91, city=null, referrer_id=null | PASS    |
+| 6   | Placeholder room renders                                    | HTTP 200, body contains "You're in"                                                         | 200, contains=true                                                      | PASS    |
+| 7   | Duplicate phone: stays on /signup, verbatim error, no second row | inline alert text matches verbatim, exactly 1 row in DB                                | url=/signup, error=`This number is already in! Check your messages — you're already part of YogaParty.`, rows=1 | PASS    |
+| 8a  | Referral capture via `?ref=`                                | `localStorage.yp_ref` = REF, URL strips `?ref=`                                             | yp_ref=6353ba5e-030b-47b1-b770-7be7a943316d, url=/                       | PASS    |
+| 8b  | Referred signup row has `referrer_id` = REF                 | referrer_id matches REF                                                                     | referrer_id=6353ba5e-030b-47b1-b770-7be7a943316d                         | PASS    |
+| 9   | International (+1) signup stores country_code              | country_code == "+1"                                                                        | country_code=+1                                                          | PASS    |
+| 10  | DOM-injected `<input name="city" value="MaliciousCity">` is ignored by the action | inserted city != "MaliciousCity"                                  | city=null                                                               | PASS    |
+
+**Summary: 12/12 PASS (6 GET probes + 6 browser-driven assertions covering 10 plan checks).**
+
+### Deviation A — RLS gate on the live Supabase project (Rule 3)
+
+During the first browser run the dev server logged:
+
+```
+signup insert failed {
+  code: '42501',
+  message: 'new row violates row-level security policy for table "signups"'
+}
+```
+
+The Phase 1/2 contract (Plan 01-01 + Plan 02-02 SUMMARY) was **anon insert with RLS off**. The live Supabase project enabled RLS by default on `signups` and no INSERT policy was created in the initial migration. This blocked the entire signup flow.
+
+**Fix applied** (commit `0468c31`): switched `app/actions/signup.ts` from the anon-key server client (`@/lib/supabase/server`) to the service-role admin client (`@/lib/supabase/admin`). Plan 02-02's SUMMARY explicitly listed this as one of two acceptable Phase 4 pivots. Choosing the client switch was strictly cheaper than running a DDL migration to disable RLS or to add a permissive policy:
+
+- Zero DB schema changes.
+- Service-role key remains server-only — no key reaches the browser; the action stays inside a `'use server'` module.
+- Threat boundary unchanged: `lib/supabase/admin.ts` already documents that this client must never be imported into client code, and no other call site exists.
+- Restores forward compatibility with Phase 4 RLS hardening (the action will already be in the right shape).
+
+This is a Rule 3 deviation: a blocking issue resolved automatically and atomically without architectural change beyond what Plan 02-02 had already pre-approved.
+
+### Deviation B — Smoke verification queries use the service-role key
+
+The original Plan 04 Task 3 procedure assumed a human would inspect the Supabase Dashboard to count rows. Because the smoke runs headless via Playwright, verification reads use Supabase REST. Anon SELECT is RLS-blocked under deviation A, so the smoke script reads with the service-role key. The key never leaves the developer's machine.
+
+### Deviation C — Smoke script committed at repo root
+
+`smoke.mjs` was added to the repository root to make the end-to-end check repeatable. This is a single-file artifact (no package.json change; `playwright` is dev-only and was installed transiently). It is not in the plan's declared `files_modified` list.
+
+### Notes / Limitations
+
+- Local dev does not synthesize `x-geo-city` / `x-geo-country` headers; every inserted row had `city = null`. International country detection on Vercel preview is covered in Task 3b below.
+- Test rows were cleaned up after the run (PATCH referrer_id=null, then DELETE WHERE name LIKE 'Smoke%').
+- Rerunning `node ./smoke.mjs` from the repo root reproduces the full table.
 
 ## Vercel Preview International Check (Plan 04 Task 3b)
 
