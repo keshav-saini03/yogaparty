@@ -22,6 +22,8 @@ export async function findOrCreateCityRoom(
     .eq('type', 'city')
     .eq('city', cityKey)
     .eq('is_active', true)
+    .order('created_at', { ascending: true })
+    .limit(1)
     .maybeSingle();
 
   if (existing.data) {
@@ -48,6 +50,8 @@ export async function findOrCreateCityRoom(
       .eq('type', 'city')
       .eq('city', cityKey)
       .eq('is_active', true)
+      .order('created_at', { ascending: true })
+      .limit(1)
       .maybeSingle();
 
     if (retry.data) {

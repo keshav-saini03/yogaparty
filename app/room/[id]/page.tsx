@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { getRoomById } from '@/lib/rooms';
+import { findOrCreateCityRoom, getRoomById } from '@/lib/rooms';
 import { RoomClient } from './RoomClient';
 
 export const dynamic = 'force-dynamic';
@@ -26,11 +26,6 @@ export default async function RoomPage({ params }: { params: Params }) {
     redirect(`/signup?next=/room/${id}`);
   }
 
-  const room = await getRoomById(id);
-  if (!room) {
-    redirect(`/signup?next=/room/${id}`);
-  }
-
   const supabase = createAdminClient();
   const { data: signup } = await supabase
     .from('signups')
@@ -39,7 +34,21 @@ export default async function RoomPage({ params }: { params: Params }) {
     .maybeSingle();
 
   if (!signup) {
+    // Stale cookie pointing to a non-existent signup (e.g., the row was
+    // deleted). Bounce through signup; the action will overwrite the cookie
+    // on success. Server Components can't mutate cookies — that's fine.
     redirect(`/signup?next=/room/${id}`);
+  }
+
+  const room = await getRoomById(id);
+
+  // If the requested room does not exist, fall back to the user's own city
+  // room rather than looping back through /signup. Common cause: a stale URL
+  // from before Phase 3 changed `/room/[id]` semantics from signup-id to
+  // rooms.id, or simply a typo / shared bad link.
+  if (!room) {
+    const cityRoom = await findOrCreateCityRoom(signup.city);
+    redirect(`/room/${cityRoom.id}`);
   }
 
   return (

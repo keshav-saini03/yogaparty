@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { findOrCreateCityRoom } from '@/lib/rooms';
+import { findOrCreateCityRoom, getRoomById } from '@/lib/rooms';
 import { getDetectedCity } from '@/lib/geo';
 import type { SignupState } from '@/lib/types';
 
@@ -32,6 +32,18 @@ async function setSessionCookie(signupId: string) {
 function safeNextPath(value: string | null | undefined): string | null {
   if (!value) return null;
   return NEXT_PATH_RE.test(value) ? value : null;
+}
+
+async function resolveNextOrCityRoom(
+  rawNext: string,
+  cityRoomId: string
+): Promise<string> {
+  const next = safeNextPath(rawNext);
+  if (!next) return `/room/${cityRoomId}`;
+  const candidateId = next.slice('/room/'.length);
+  const room = await getRoomById(candidateId);
+  if (!room) return `/room/${cityRoomId}`;
+  return next;
 }
 
 export async function createSignup(
@@ -98,8 +110,8 @@ export async function createSignup(
     if (existing.data?.id) {
       const room = await findOrCreateCityRoom(existing.data.city ?? city);
       await setSessionCookie(existing.data.id);
-      const next = safeNextPath(rawNext);
-      redirect(next ?? `/room/${room.id}`);
+      const target = await resolveNextOrCityRoom(rawNext, room.id);
+      redirect(target);
     }
 
     console.error('duplicate signup lookup failed', existing.error);
@@ -113,6 +125,6 @@ export async function createSignup(
 
   const room = await findOrCreateCityRoom(data.city ?? city);
   await setSessionCookie(data.id);
-  const next = safeNextPath(rawNext);
-  redirect(next ?? `/room/${room.id}`);
+  const target = await resolveNextOrCityRoom(rawNext, room.id);
+  redirect(target);
 }
