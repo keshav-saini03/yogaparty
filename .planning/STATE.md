@@ -2,8 +2,8 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-04-27T09:27:01.219Z"
+status: discussing
+last_updated: "2026-04-27T13:30:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 2
@@ -28,19 +28,19 @@ progress:
 
 ## Current Position
 
-Phase: 02 (landing-signup) — COMPLETE
-Plan: 4 of 4 (all complete)
+Phase: 03 (city-watch-room) — CONTEXT GATHERED
+Plan: 0 of TBD
 
-- **Phase:** Phase 02 (Landing & Signup) — COMPLETE; ready for `/gsd-plan-phase 3`
-- **Plan:** 02-04 closed (signup form, smoke, bundle audit, phase gate)
-- **Status:** Phase 02 complete. REQ-LANDING / REQ-SIGNUP / REQ-INTERNATIONAL satisfied.
-- **Progress:** `[██████████] 2/7 phases complete (6/6 plans, 100%)`
+- **Phase:** Phase 03 (City Watch Room) — CONTEXT.md written; ready for `/gsd-plan-phase 3`
+- **Status:** Phase 02 complete. Phase 03 context locked with 26 decisions (D-301..D-326) across 4 gray areas (URL, identity, host election, video picker).
+- **Progress:** `[██████████] 2/7 phases complete (6/6 plans); Phase 3 ready to plan`
 
 ## Decisions
 
 - 2026-04-27 — Plan 02-04 closed: signup funnel ships end-to-end (browser smoke 12/12 PASS); bundle budget renegotiated to ≤120 KB shared + ≤5 KB per-route (REQ-LANDING acceptance updated); signup action uses service-role admin client (Rule 3 pivot for live RLS — pre-approved by Plan 02-02 SUMMARY); Vercel preview international check deferred to Phase 3 kickoff (Option B, no non-IN VPN available within time budget).
 - 2026-04-27 — Post-Plan-04 redesign: editorial dark-mode broadcast aesthetic (Fraunces serif + JetBrains Mono); on-screen brand mark is "Watch · Party" (the literal "YogaParty" string contains the banned `yoga` token). Repo/URL names unchanged.
 - 2026-04-27 — Post-Plan-04 idempotent duplicate-phone behavior: `app/actions/signup.ts` now redirects existing users to `/room/<existing-uuid>` on duplicate phone (instead of returning the verbatim friendly error). This softens locked truth #3 of Plan 02-04; flagged in 02-04-SUMMARY for Phase 3 / pre-demo review.
+- 2026-04-27 — Phase 3 context gathered (`/gsd-discuss-phase 3`). Key locks: `/room/[id]` resolves by `rooms.id` (D-301..304); HTTP-only `yp_session` cookie carries identity (D-305..308); presence-derived host election with no schema drift (D-309..313); curated videos in `lib/videos.ts` const, host swap via modal/sheet, room created with `youtube_video_id=NULL` and shows "waiting for host pick" (D-314..318); chat ephemeral broadcast-only (D-319..321). Phase 3 must update `app/actions/signup.ts:93` and `:106` to redirect to `rooms.id` via `findOrCreateCityRoom(city)` helper, resolving the open Phase 2 review item.
 
 ## Performance Metrics
 
