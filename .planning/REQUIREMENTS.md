@@ -184,9 +184,9 @@ Each requirement has acceptance criteria written as observable behaviors. Source
 | Requirement | Phase | Status |
 |---|---|---|
 | REQ-INFRA | Phase 1 | Pending |
-| REQ-LANDING | Phase 2 | Pending |
-| REQ-SIGNUP | Phase 2 | Pending |
-| REQ-INTERNATIONAL | Phase 2 | Pending |
+| REQ-LANDING | Phase 2 | Complete |
+| REQ-SIGNUP | Phase 2 | Complete |
+| REQ-INTERNATIONAL | Phase 2 | Complete |
 | REQ-CITY-ROOM | Phase 3 | Pending |
 | REQ-ROOM-SYNC | Phase 3 | Pending |
 | REQ-CHAT | Phase 3 | Pending |

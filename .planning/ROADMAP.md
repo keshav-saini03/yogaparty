@@ -9,8 +9,8 @@ The phases mirror the SPEC's "always-shippable" layered build priority. After ev
 
 ## Phases
 
-- [ ] **Phase 1: Scaffold & Deploy** — Next.js 15 + Supabase + Vercel deploys on `git push`
-- [ ] **Phase 2: Landing & Signup** — Cold visitors become rows in `signups` from a mobile-first landing
+- [x] **Phase 1: Scaffold & Deploy** — Next.js 15 + Supabase + Vercel deploys on `git push`
+- [x] **Phase 2: Landing & Signup** — Cold visitors become rows in `signups` from a mobile-first landing
 - [ ] **Phase 3: City Watch Room** — Synced YouTube + chat + presence in a city-scoped room
 - [ ] **Phase 4: WhatsApp Sharing & Referral** — Every signup can invite friends; referrals attribute correctly
 - [ ] **Phase 5: Competition Engine** — City leaderboard + live signup counter drive city-vs-city virality
@@ -42,10 +42,10 @@ The phases mirror the SPEC's "always-shippable" layered build priority. After ev
   3. A visitor with a non-`+91` country code can complete signup, has a non-IN city detected, and is redirected to that international city's room
   4. Submitting with an already-used phone number shows a friendly duplicate error instead of a 500
 **Plans:** 4 plans
-- [ ] 02-01-PLAN.md — Foundations: lib/geo, lib/types, lib/country-codes, room placeholder (Wave 1)
-- [ ] 02-02-PLAN.md — Server action createSignup with 23505/23503 handling (Wave 2)
-- [ ] 02-03-PLAN.md — Landing page + 5 components (Hero, SocialProof, CityPreview, CounterPlaceholder, ReferralCapture) (Wave 2, parallel with 02-02)
-- [ ] 02-04-PLAN.md — Signup form, signup page, smoke test, bundle audit (Wave 3, has checkpoint)
+- [x] 02-01-PLAN.md — Foundations: lib/geo, lib/types, lib/country-codes, room placeholder (Wave 1)
+- [x] 02-02-PLAN.md — Server action createSignup with 23505/23503 handling (Wave 2)
+- [x] 02-03-PLAN.md — Landing page + 5 components (Hero, SocialProof, CityPreview, CounterPlaceholder, ReferralCapture) (Wave 2, parallel with 02-02)
+- [x] 02-04-PLAN.md — Signup form, signup page, smoke test, bundle audit (Wave 3, has checkpoint)
 **UI hint**: yes
 
 ### Phase 3: City Watch Room
