@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { findOrCreateCityRoom, getRoomById } from '@/lib/rooms';
+import { getRoomById } from '@/lib/rooms';
 import { getDetectedCity } from '@/lib/geo';
 import type { SignupState } from '@/lib/types';
 
@@ -34,15 +34,18 @@ function safeNextPath(value: string | null | undefined): string | null {
   return NEXT_PATH_RE.test(value) ? value : null;
 }
 
-async function resolveNextOrCityRoom(
-  rawNext: string,
-  cityRoomId: string
-): Promise<string> {
+/**
+ * After signup/duplicate-phone: if the user came in via ?next=/room/{id}
+ * AND that room exists, send them there. Otherwise drop them in the
+ * lobby (/rooms) — we no longer auto-join a city room. Users pick what
+ * they want from the lobby.
+ */
+async function resolveNextOrLobby(rawNext: string): Promise<string> {
   const next = safeNextPath(rawNext);
-  if (!next) return `/room/${cityRoomId}`;
+  if (!next) return '/rooms';
   const candidateId = next.slice('/room/'.length);
   const room = await getRoomById(candidateId);
-  if (!room) return `/room/${cityRoomId}`;
+  if (!room) return '/rooms';
   return next;
 }
 
@@ -119,9 +122,8 @@ export async function createSignup(
       .maybeSingle();
 
     if (existing.data?.id) {
-      const room = await findOrCreateCityRoom(existing.data.city ?? city);
       await setSessionCookie(existing.data.id);
-      const target = await resolveNextOrCityRoom(rawNext, room.id);
+      const target = await resolveNextOrLobby(rawNext);
       redirect(target);
     }
 
@@ -134,8 +136,7 @@ export async function createSignup(
     return { error: 'Something went wrong. Try again.' };
   }
 
-  const room = await findOrCreateCityRoom(data.city ?? city);
   await setSessionCookie(data.id);
-  const target = await resolveNextOrCityRoom(rawNext, room.id);
+  const target = await resolveNextOrLobby(rawNext);
   redirect(target);
 }

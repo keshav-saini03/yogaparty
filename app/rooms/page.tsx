@@ -5,6 +5,7 @@ import { createAdminClient } from '@/lib/supabase/admin';
 import { getDetectedCity } from '@/lib/geo';
 import { PublicRoomCard } from '@/components/rooms/PublicRoomCard';
 import { CreateRoomForm } from '@/components/rooms/CreateRoomForm';
+import { JoinByCodeForm } from '@/components/rooms/JoinByCodeForm';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -60,17 +61,25 @@ export default async function RoomsDirectoryPage() {
 
       <section className="mx-auto max-w-6xl px-4 sm:px-6 py-12 sm:py-16">
         <div className="rise" style={{ animationDelay: '120ms' }}>
-          <p className="eyebrow">Open rooms</p>
+          <p className="eyebrow">The lobby</p>
           <h1 className="font-display mt-3 text-[clamp(2rem,6vw,4rem)] leading-[0.95] tracking-[-0.02em] font-light">
-            Drop into someone&apos;s room.
+            Pick a room.
             <span className="block italic" style={{ fontVariationSettings: '"SOFT" 100' }}>
               Or open your own.
             </span>
           </h1>
           <p className="mt-6 max-w-xl text-[color:var(--ink-soft)] leading-relaxed">
-            Public rooms are watch parties anyone can join. Open one, give it a title,
-            share the link — your friends and strangers near you can tap in.
+            Got a private invite link? Paste it. Want to drop into a public room?
+            Browse below. Want to host? Open a public or private room — your call.
           </p>
+        </div>
+
+        {/* Join-by-code lives at the top because it's the most directed action */}
+        <div
+          className="mt-10 rise border border-[color:var(--line)] bg-[color:var(--bg-raised)] p-5 sm:p-6"
+          style={{ animationDelay: '200ms' }}
+        >
+          <JoinByCodeForm />
         </div>
 
         <div className="mt-12 grid lg:grid-cols-[1.3fr_1fr] gap-12 items-start">
@@ -135,26 +144,26 @@ export default async function RoomsDirectoryPage() {
           {/* Create form */}
           <aside className="border border-[color:var(--line)] bg-[color:var(--bg-raised)] p-6 sm:p-8 lg:sticky lg:top-6">
             <div className="flex items-baseline justify-between border-b border-[color:var(--line)] pb-3 mb-6">
-              <p className="eyebrow">New broadcast</p>
+              <p className="eyebrow">Open a room</p>
               <span className="font-mono text-[0.62rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)]">
-                {cityLabel ? `${cityLabel} · public` : 'Public · 7 max'}
+                {cityLabel ? `${cityLabel}` : 'Anywhere'}
               </span>
             </div>
             <p className="text-[0.95rem] text-[color:var(--ink-soft)] leading-relaxed mb-6">
-              Give your room a title. Anyone can join via the link or this directory.
+              Title it, choose visibility, share the link.
               {cityLabel && (
                 <span className="block mt-2 text-[color:var(--ink-mute)] text-[0.85rem]">
-                  This room will be tagged{' '}
+                  Tagged{' '}
                   <span className="text-[color:var(--accent)] font-mono uppercase tracking-[0.12em]">
                     {cityLabel}
-                  </span>
-                  .
+                  </span>{' '}
+                  by default.
                 </span>
               )}
             </p>
             <CreateRoomForm />
             <p className="mt-6 font-mono text-[0.6rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)]">
-              You&apos;ll need to be signed up first.
+              Private rooms aren&apos;t listed — share the link to invite people.
             </p>
           </aside>
         </div>

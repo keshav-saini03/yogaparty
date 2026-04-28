@@ -117,12 +117,13 @@ export async function listPublicRooms(limit = 50): Promise<PublicRoomListing[]> 
     Date.now() - ROOM_LISTING_TTL_MINUTES * 60_000
   ).toISOString();
 
-  // Try the activity-aware query first. If the column doesn't exist yet
-  // (migration not applied), fall back to the legacy listing.
+  // Try the activity-aware + privacy-aware query first. If a column doesn't
+  // exist yet (migration not applied), fall back to the legacy listing.
   const recent = await supabase
     .from('rooms')
     .select('id, title, city, youtube_video_id, created_at, creator_id')
     .eq('is_active', true)
+    .eq('is_public', true)
     .not('title', 'is', null)
     .gte('last_active_at', cutoff)
     .order('last_active_at', { ascending: false })
@@ -182,11 +183,13 @@ export async function createPublicRoom(args: {
   title: string;
   creatorId: string;
   city: string | null;
+  isPublic?: boolean;
 }): Promise<CreatePublicRoomResult> {
   const cleanTitle = args.title.trim();
   if (cleanTitle.length === 0) return { error: 'Give your room a title.' };
   if (cleanTitle.length > 80) return { error: 'Title must be 80 chars or fewer.' };
 
+  const isPublic = args.isPublic !== false;
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from('rooms')
@@ -196,6 +199,7 @@ export async function createPublicRoom(args: {
       creator_id: args.creatorId,
       city: normalizeCity(args.city),
       is_active: true,
+      is_public: isPublic,
       youtube_video_id: null,
     })
     .select('id')

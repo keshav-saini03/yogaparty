@@ -1,7 +1,7 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { findOrCreateCityRoom, getRoomById } from '@/lib/rooms';
+import { getRoomById } from '@/lib/rooms';
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -41,14 +41,13 @@ export async function resolveSession(): Promise<ResolvedSession | null> {
 
 /**
  * For /signup and /login: if the visitor already has a valid session, send
- * them straight to their next-room (when ?next= is set + valid) or their
- * city room. Returns nothing; throws via redirect() when applicable.
+ * them to the lobby (/rooms) — UNLESS ?next= points at a real existing
+ * room, in which case honor it. We deliberately do NOT auto-join the
+ * user's last city room; users land in the lobby and choose.
  */
 export async function redirectIfSignedIn(rawNext?: string | null): Promise<void> {
   const session = await resolveSession();
   if (!session) return;
-
-  const room = await findOrCreateCityRoom(session.city);
 
   if (rawNext && NEXT_PATH_RE.test(rawNext)) {
     const candidateId = rawNext.slice('/room/'.length);
@@ -60,5 +59,5 @@ export async function redirectIfSignedIn(rawNext?: string | null): Promise<void>
   }
 
   const { redirect } = await import('next/navigation');
-  redirect(`/room/${room.id}`);
+  redirect('/rooms');
 }

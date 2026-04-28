@@ -2,13 +2,11 @@ import Link from 'next/link';
 
 type Props = {
   signedIn?: boolean;
-  resumeRoomId?: string | null;
 };
 
-export function Hero({ signedIn = false, resumeRoomId = null }: Props) {
-  const ctaHref =
-    signedIn && resumeRoomId ? `/room/${resumeRoomId}` : '/signup';
-  const ctaLabel = signedIn ? 'Back to your room' : 'Join a Watch Party';
+export function Hero({ signedIn = false }: Props) {
+  const ctaHref = signedIn ? '/rooms' : '/signup';
+  const ctaLabel = signedIn ? 'Open the lobby' : 'Join a Watch Party';
 
   return (
     <div className="relative">
@@ -47,7 +45,7 @@ export function Hero({ signedIn = false, resumeRoomId = null }: Props) {
         </Link>
         <span className="font-mono text-[0.7rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)] hidden sm:inline">
           {signedIn
-            ? 'You\u2019re signed in · cookie remembers you'
+            ? 'Pick a public room or paste a private code'
             : 'No OTP · 3 fields · 30 sec'}
         </span>
       </div>

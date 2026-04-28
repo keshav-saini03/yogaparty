@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { findOrCreateCityRoom, getRoomById } from '@/lib/rooms';
+import { getRoomById } from '@/lib/rooms';
 
 const NEXT_PATH_RE = /^\/room\/[0-9a-f-]{36}$/i;
 
@@ -28,15 +28,12 @@ function safeNextPath(value: string | null | undefined): string | null {
   return NEXT_PATH_RE.test(value) ? value : null;
 }
 
-async function resolveNextOrCityRoom(
-  rawNext: string,
-  cityRoomId: string
-): Promise<string> {
+async function resolveNextOrLobby(rawNext: string): Promise<string> {
   const next = safeNextPath(rawNext);
-  if (!next) return `/room/${cityRoomId}`;
+  if (!next) return '/rooms';
   const candidateId = next.slice('/room/'.length);
   const room = await getRoomById(candidateId);
-  if (!room) return `/room/${cityRoomId}`;
+  if (!room) return '/rooms';
   return next;
 }
 
@@ -81,8 +78,7 @@ export async function loginByPhone(
     );
   }
 
-  const room = await findOrCreateCityRoom(signup.city);
   await setSessionCookie(signup.id);
-  const target = await resolveNextOrCityRoom(rawNext, room.id);
+  const target = await resolveNextOrLobby(rawNext);
   redirect(target);
 }

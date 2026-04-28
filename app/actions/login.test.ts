@@ -92,7 +92,7 @@ describe('loginByPhone', () => {
     expect(r).toEqual({ error: 'Something went wrong. Try again.' });
   });
 
-  it('sets cookie and redirects to city room on successful lookup', async () => {
+  it('sets cookie and redirects to lobby on successful lookup', async () => {
     lookupResultRef.data = {
       id: 'sig-id-uuid',
       city: 'Mumbai',
@@ -106,8 +106,7 @@ describe('loginByPhone', () => {
       'sig-id-uuid',
       expect.any(Object)
     );
-    expect(findOrCreateCityRoomMock).toHaveBeenCalledWith('Mumbai');
-    expect(redirectMock).toHaveBeenCalledWith('/room/CITY-ROOM');
+    expect(redirectMock).toHaveBeenCalledWith('/rooms');
   });
 
   it('honors a valid ?next= path when the room exists', async () => {
@@ -132,7 +131,7 @@ describe('loginByPhone', () => {
     );
   });
 
-  it('falls back to city room when ?next= room does not exist', async () => {
+  it('falls back to lobby when ?next= room does not exist', async () => {
     lookupResultRef.data = {
       id: 'sig-id-uuid',
       city: 'Mumbai',
@@ -149,7 +148,7 @@ describe('loginByPhone', () => {
         })
       )
     ).rejects.toThrow('REDIRECT');
-    expect(redirectMock).toHaveBeenCalledWith('/room/CITY-ROOM');
+    expect(redirectMock).toHaveBeenCalledWith('/rooms');
   });
 
   it('rejects open-redirect-style next paths', async () => {
@@ -168,6 +167,6 @@ describe('loginByPhone', () => {
         })
       )
     ).rejects.toThrow('REDIRECT');
-    expect(redirectMock).toHaveBeenCalledWith('/room/CITY-ROOM');
+    expect(redirectMock).toHaveBeenCalledWith('/rooms');
   });
 });

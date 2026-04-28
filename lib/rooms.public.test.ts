@@ -132,6 +132,33 @@ describe('createPublicRoom', () => {
     });
     expect(r).toEqual({ ok: true, id: 'rid' });
   });
+
+  it('defaults isPublic=true when not specified', async () => {
+    insertSingleSpy.mockResolvedValueOnce({
+      data: { id: 'rid' },
+      error: null,
+    });
+    const r = await createPublicRoom({
+      title: 'Default visibility',
+      creatorId: 'c1',
+      city: 'Mumbai',
+    });
+    expect(r).toEqual({ ok: true, id: 'rid' });
+  });
+
+  it('accepts isPublic=false for private rooms', async () => {
+    insertSingleSpy.mockResolvedValueOnce({
+      data: { id: 'rid' },
+      error: null,
+    });
+    const r = await createPublicRoom({
+      title: 'Private flow',
+      creatorId: 'c1',
+      city: 'Mumbai',
+      isPublic: false,
+    });
+    expect(r).toEqual({ ok: true, id: 'rid' });
+  });
 });
 
 const mkRoom = (

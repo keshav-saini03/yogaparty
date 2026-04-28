@@ -19,6 +19,9 @@ export async function createRoomAction(
   if (!title) return { error: 'Give your room a title.' };
   if (title.length > 80) return { error: 'Title must be 80 chars or fewer.' };
 
+  const visibility = formData.get('visibility')?.toString();
+  const isPublic = visibility !== 'private';
+
   const c = await cookies();
   const session = c.get('yp_session')?.value;
   if (!session || !UUID_RE.test(session)) {
@@ -42,6 +45,7 @@ export async function createRoomAction(
     title,
     creatorId: signup.id,
     city,
+    isPublic,
   });
 
   if ('error' in result) return { error: result.error };
