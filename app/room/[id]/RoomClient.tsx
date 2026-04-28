@@ -23,6 +23,17 @@ import {
   shouldCorrect,
   type Participant,
 } from '@/lib/sync-utils';
+import { useCall } from '@/hooks/useCall';
+import { useAudioDuck } from '@/hooks/useAudioDuck';
+import { usePeerConnections } from '@/hooks/usePeerConnections';
+import { CallDock, type TileVm } from '@/components/room/CallDock';
+import { StartTalkingButton } from '@/components/room/StartTalkingButton';
+import {
+  isOfferPayload,
+  isAnswerPayload,
+  isIcePayload,
+  isCallEndPayload,
+} from '@/lib/webrtc-events';
 
 type Props = {
   roomId: string;
@@ -70,6 +81,68 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
 
   const { hostId, isHost, host } = usePresence(participants, self);
   isHostRef.current = isHost;
+
+  // ── WebRTC overlay wiring ────────────────────────────────────
+  const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(
+    new Map()
+  );
+  const callStreamRef = useRef<MediaStream | null>(null);
+
+  // Derived: who in presence is currently on call (excluding self).
+  const peersOnCall = useMemo(
+    () =>
+      participants
+        .filter((p) => p.user_id !== self.user_id && p.on_call_intent)
+        .map((p) => p.user_id),
+    [participants, self.user_id]
+  );
+
+  const audioDuck = useAudioDuck({ userVolume: 80 });
+
+  const peers = usePeerConnections({
+    selfId: self.user_id,
+    channel,
+    getLocalStream: () => callStreamRef.current,
+    onRemoteStream: (peerId, stream) => {
+      setRemoteStreams((prev) => {
+        const next = new Map(prev);
+        next.set(peerId, stream);
+        return next;
+      });
+      audioDuck.attachPeer(peerId, stream);
+    },
+    onPeerDropped: (peerId) => {
+      setRemoteStreams((prev) => {
+        const next = new Map(prev);
+        next.delete(peerId);
+        return next;
+      });
+      audioDuck.detachPeer(peerId);
+    },
+  });
+
+  // Stash latest peers in a ref so the realtime channel listeners (registered
+  // once before subscribe) always dispatch to the current callbacks.
+  const peersRef = useRef(peers);
+  peersRef.current = peers;
+
+  const call = useCall({
+    selfId: self.user_id,
+    selfName: self.name,
+    selfCity: self.city,
+    selfJoinedAt: Date.now(),
+    channel,
+    peersOnCall: () => peersOnCall,
+    onCreateOfferTo: peers.createOfferTo,
+    onReplaceVideo: peers.replaceVideoTrackEverywhere,
+    onClosePeer: peers.closePeer,
+    onCloseAll: peers.closeAll,
+  });
+
+  // Keep `getLocalStream` returning the latest stream after `useCall` acquires it.
+  useEffect(() => {
+    callStreamRef.current = call.getStream();
+  }, [call.state, call.micEnabled, call.camEnabled, call]);
 
   const {
     emitPlayerEvent,
@@ -228,6 +301,30 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       }
     });
 
+    // ── WebRTC signaling ─────────────────────────────────────────
+    ch.on('broadcast', { event: 'webrtc_offer' }, ({ payload }) => {
+      if (!isOfferPayload(payload)) return;
+      if (payload.to !== selfIdRef.current) return;
+      void peersRef.current.handleOffer(payload);
+    });
+
+    ch.on('broadcast', { event: 'webrtc_answer' }, ({ payload }) => {
+      if (!isAnswerPayload(payload)) return;
+      if (payload.to !== selfIdRef.current) return;
+      void peersRef.current.handleAnswer(payload);
+    });
+
+    ch.on('broadcast', { event: 'webrtc_ice' }, ({ payload }) => {
+      if (!isIcePayload(payload)) return;
+      if (payload.to !== selfIdRef.current) return;
+      void peersRef.current.handleIce(payload);
+    });
+
+    ch.on('broadcast', { event: 'webrtc_call_end' }, ({ payload }) => {
+      if (!isCallEndPayload(payload)) return;
+      peersRef.current.closePeer(payload.from);
+    });
+
     // ── Subscribe + track presence on each (re)connect ───────────
     ch.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
@@ -236,6 +333,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
           name: self.name,
           city: self.city,
           joined_at: Date.now(),
+          on_call_intent: false,
         });
         setIsReady(true);
       }
@@ -351,6 +449,35 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     [videoId]
   );
 
+  const selfTile: TileVm | null =
+    call.state === 'on-call'
+      ? {
+          peerId: self.user_id,
+          name: self.name,
+          city: self.city,
+          micOn: call.micEnabled,
+          camOn: call.camEnabled,
+          isLocal: true,
+          isSpeaking: false,
+          stream: call.getStream(),
+        }
+      : null;
+
+  const peerTiles: TileVm[] = participants
+    .filter((p) => p.user_id !== self.user_id && remoteStreams.has(p.user_id))
+    .map((p) => ({
+      peerId: p.user_id,
+      name: p.name,
+      city: p.city,
+      micOn: true, // we don't broadcast per-track state today; assume on
+      camOn: true, // ditto — tile renders monogram fallback if no video frames
+      isLocal: false,
+      isSpeaking: audioDuck.isSpeaking(p.user_id),
+      stream: remoteStreams.get(p.user_id) ?? null,
+    }));
+
+  const dockEmpty = call.state === 'idle' && peerTiles.length === 0;
+
   const welcomeShareText = postSignupCopy({
     cityCount: participants.length,
     cityName: roomCity,
@@ -410,6 +537,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
                 playerRef.current = h;
               }}
               onEvent={onPlayerEvent}
+              duckedVolume={audioDuck.duckedVolume}
             />
 
             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -450,6 +578,24 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
                 </button>
               )}
             </div>
+
+            <CallDock
+              state={call.state}
+              selfTile={selfTile}
+              peerTiles={peerTiles}
+              micEnabled={call.micEnabled}
+              camEnabled={call.camEnabled}
+              permissionError={call.permissionError}
+              onToggleMic={() => void call.toggleMic()}
+              onToggleCam={() => void call.toggleCam()}
+              onLeave={() => void call.leave()}
+            />
+
+            {dockEmpty && (
+              <div className="flex pt-2">
+                <StartTalkingButton onClick={() => void call.toggleMic()} />
+              </div>
+            )}
 
             {pickError && (
               <p
