@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import type React from 'react';
 import YouTube, { type YouTubeEvent, type YouTubePlayer } from 'react-youtube';
 
 export const HOST_OPTS = {
@@ -64,6 +65,12 @@ type Props = {
    * tracks the slider rather than a hardcoded constant.
    */
   onVolumeChange?: (volume: number) => void;
+  /**
+   * Host-only overlay control rendered at the player's top-right corner.
+   * Sits between the click-shield (z-10) and the volume bar (z-20). Ignored
+   * when `isHost` is false. Use it for host-only chrome like "Change video".
+   */
+  hostControl?: React.ReactNode;
 };
 
 export function Player({
@@ -75,6 +82,7 @@ export function Player({
   className,
   duckedVolume,
   onVolumeChange,
+  hostControl,
 }: Props) {
   const ytRef = useRef<YouTubePlayer | null>(null);
   const handleRef = useRef<PlayerHandle | null>(null);
@@ -199,6 +207,15 @@ export function Player({
           lastStateRef.current = state;
         }}
       />
+
+      {isHost && hostControl && (
+        <div
+          data-host-slot="true"
+          className="absolute top-2 right-2 z-[15] pointer-events-auto"
+        >
+          {hostControl}
+        </div>
+      )}
 
       {/* Click-shield for non-hosts: blocks pointer events on the iframe so
           a tap/click can't toggle play-pause locally. Sits below the audio

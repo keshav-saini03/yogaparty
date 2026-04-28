@@ -708,44 +708,43 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
               onEvent={onPlayerEvent}
               duckedVolume={audioDuck.duckedVolume}
               onVolumeChange={setUserVolume}
+              hostControl={
+                isHost ? (
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(true)}
+                    className="font-mono text-[0.58rem] tracking-[0.22em] uppercase border border-[color:var(--accent)] text-[color:var(--accent)] bg-black/70 backdrop-blur-[2px] px-2.5 py-1.5 hover:bg-[color:var(--accent-soft)] transition-colors"
+                  >
+                    Change video
+                  </button>
+                ) : null
+              }
             />
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                {videoId ? (
-                  <>
-                    <p className="eyebrow">Now broadcasting</p>
-                    <p className="mt-1 font-display text-lg sm:text-xl text-[color:var(--ink)] truncate">
-                      {currentVideoMeta ? (
-                        currentVideoMeta.title
-                      ) : (
-                        <>
-                          Custom broadcast
-                          <span className="ml-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)]">
-                            {videoId}
-                          </span>
-                        </>
-                      )}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="eyebrow">Broadcast queued</p>
-                    <p className="mt-1 font-display text-lg sm:text-xl text-[color:var(--ink-soft)]">
-                      Waiting for host pick.
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {isHost && (
-                <button
-                  type="button"
-                  onClick={() => setPickerOpen(true)}
-                  className="font-mono text-[0.65rem] tracking-[0.22em] uppercase border border-[color:var(--accent)] text-[color:var(--accent)] px-3 py-2 hover:bg-[color:var(--accent-soft)] transition-colors"
-                >
-                  Change video
-                </button>
+            <div className="min-w-0">
+              {videoId ? (
+                <>
+                  <p className="eyebrow">Now broadcasting</p>
+                  <p className="mt-1 font-display text-lg sm:text-xl text-[color:var(--ink)] truncate">
+                    {currentVideoMeta ? (
+                      currentVideoMeta.title
+                    ) : (
+                      <>
+                        Custom broadcast
+                        <span className="ml-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)]">
+                          {videoId}
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="eyebrow">Broadcast queued</p>
+                  <p className="mt-1 font-display text-lg sm:text-xl text-[color:var(--ink-soft)]">
+                    Waiting for host pick.
+                  </p>
+                </>
               )}
             </div>
 
