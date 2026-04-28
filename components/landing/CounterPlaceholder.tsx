@@ -10,7 +10,7 @@ export function CounterPlaceholder({ total, india, international }: Props) {
   return (
     <div className="rise relative" style={{ animationDelay: '320ms' }}>
       <div className="flex items-baseline gap-3 pb-3 border-b border-[color:var(--line)]">
-        <span className="eyebrow">Watching now</span>
+        <span className="eyebrow">Total signups</span>
         <span className="ml-auto font-mono text-[0.65rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)]">
           ↻ Real-time
         </span>

@@ -75,6 +75,13 @@ export default async function Landing() {
           <span className="font-mono text-[0.72rem] tracking-[0.18em] uppercase text-[color:var(--ink)]">
             Watch · Party
           </span>
+          <span className="text-[color:var(--ink-faint)] hidden sm:inline">|</span>
+          <span className="hidden sm:inline-flex items-center gap-1.5 font-mono text-[0.65rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)] tabular-nums">
+            <span className="text-[color:var(--accent)]">
+              {new Intl.NumberFormat('en-IN').format(stats.total)}
+            </span>{' '}
+            signups
+          </span>
           <div className="ml-auto flex items-center gap-3 sm:gap-5">
             <Link
               href="/rooms"
