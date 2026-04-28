@@ -70,14 +70,20 @@ export function RoomHeader({
               onClick={onChatToggle}
               className="md:hidden relative font-mono text-[0.62rem] tracking-[0.2em] uppercase text-[color:var(--ink)] border border-[color:var(--line)] px-2 py-1 hover:border-[color:var(--accent)]"
               aria-expanded={isMobileChatOpen ? 'true' : 'false'}
-              aria-label={isMobileChatOpen ? 'Close chat' : 'Open chat'}
+              aria-label={
+                isMobileChatOpen
+                  ? 'Close chat'
+                  : unreadChat > 0
+                    ? `Open chat, ${unreadChat} unread message${unreadChat === 1 ? '' : 's'}`
+                    : 'Open chat'
+              }
             >
               {isMobileChatOpen ? 'Close' : 'Chat'}
               {!isMobileChatOpen && unreadChat > 0 && (
                 <span
                   data-testid="chat-unread-badge"
-                  className="absolute -top-1.5 -right-1.5 min-w-[1.1rem] h-[1.1rem] px-1 inline-flex items-center justify-center bg-[color:var(--accent)] text-[#0a0a0c] font-mono text-[0.55rem] tracking-[0.06em] tabular-nums"
-                  aria-label={`${unreadChat} unread messages`}
+                  className="absolute -top-1.5 -right-1.5 min-w-[1.1rem] h-[1.1rem] px-1 inline-flex items-center justify-center bg-[color:var(--accent)] text-[color:var(--bg)] font-mono text-[0.55rem] tracking-[0.06em] tabular-nums"
+                  aria-hidden="true"
                 >
                   {unreadChat > 9 ? '9+' : unreadChat}
                 </span>

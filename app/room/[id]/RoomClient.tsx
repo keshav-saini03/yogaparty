@@ -84,6 +84,9 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   const playerRef = useRef<PlayerHandle | null>(null);
   const suppressNextOutboundRef = useRef(false);
   const cooldownUntilRef = useRef(0);
+  const chatOpenRef = useRef(chatOpen);
+  chatOpenRef.current = chatOpen;
+  const isDesktopRef = useRef(false);
   // Clock-sync state. clockOffsetRef = host_clock − viewer_clock (in ms);
   // 0 for the host. rttEmaRef is the smoothed round-trip in ms. Refs (not
   // state) because we read these inside event handlers registered before
@@ -294,7 +297,9 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     // ── Chat ─────────────────────────────────────────────────────
     ch.on('broadcast', { event: 'chat' }, ({ payload }) => {
       setMessages((prev) => [...prev, payload as ChatMsg]);
-      setUnreadChat((n) => n + 1);
+      if (!isDesktopRef.current && !chatOpenRef.current) {
+        setUnreadChat((n) => n + 1);
+      }
     });
 
     // ── Video swap ───────────────────────────────────────────────
@@ -611,14 +616,18 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     setWelcomeOpen(true);
   }, [self.user_id]);
 
-  // Reset unread badge when viewport widens to md+ (desktop sidebar always visible).
+  // Keep isDesktopRef in sync with the md+ breakpoint and clear any stale
+  // unread count whenever the sidebar becomes permanently visible.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const mq = window.matchMedia('(min-width: 768px)');
-    const reset = () => mq.matches && setUnreadChat(0);
-    reset();
-    mq.addEventListener('change', reset);
-    return () => mq.removeEventListener('change', reset);
+    const update = () => {
+      isDesktopRef.current = mq.matches;
+      if (mq.matches) setUnreadChat(0);
+    };
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
   }, []);
 
   const dismissWelcome = () => {
