@@ -113,6 +113,7 @@ export function useAudioDuck(args: Args) {
       next.sort();
       const prev = speakingPeerIdsRef.current;
       if (next.length !== prev.length || next.some((id, i) => id !== prev[i])) {
+        Object.freeze(next);
         speakingPeerIdsRef.current = next;
         setSpeakingPeerIds(next);
       }
@@ -167,6 +168,7 @@ export function useAudioDuck(args: Args) {
     const prev = speakingPeerIdsRef.current;
     if (prev.includes(peerId)) {
       const next = prev.filter((id) => id !== peerId);
+      Object.freeze(next);
       speakingPeerIdsRef.current = next;
       setSpeakingPeerIds(next);
     }
