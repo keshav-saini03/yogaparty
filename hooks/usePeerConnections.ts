@@ -83,6 +83,8 @@ export function usePeerConnections(args: Args): PeerConnections {
       slotsRef.current.delete(peerId);
       args.onPeerDropped?.(peerId);
     },
+    // Intentionally narrow: stabilizing callback identity is the whole point.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [args.onPeerDropped]
   );
 
@@ -178,6 +180,8 @@ export function usePeerConnections(args: Args): PeerConnections {
 
       return slot;
     },
+    // Intentionally narrow — stable callback identity for downstream effects.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [args.selfId, args.getLocalStream, args.onRemoteStream, send, closeSlot]
   );
 
