@@ -31,3 +31,19 @@ export function diffMesh(
   }
   return { toAdd, toRemove };
 }
+
+/**
+ * Defensive guard. Returns true only when all three browser-side audio-
+ * processing flags are explicitly false. Used in tests + dev-mode to detect
+ * regressions of the music-mode constraint.
+ */
+export function isMicCleanCompatible(
+  audio: Partial<MediaTrackConstraintSet> | undefined
+): boolean {
+  if (!audio) return false;
+  return (
+    audio.echoCancellation === false &&
+    audio.autoGainControl === false &&
+    audio.noiseSuppression === false
+  );
+}

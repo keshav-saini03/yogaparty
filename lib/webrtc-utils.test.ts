@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { pickInitiator, diffMesh } from './webrtc-utils';
+import { pickInitiator, diffMesh, isMicCleanCompatible } from './webrtc-utils';
 
 describe('pickInitiator', () => {
   it('returns true when self id is lex-lower', () => {
@@ -45,5 +45,51 @@ describe('diffMesh', () => {
     const result = diffMesh(['b', 'c'], new Set(['a', 'b']));
     expect(result.toAdd).toEqual(['c']);
     expect(result.toRemove).toEqual(['a']);
+  });
+});
+
+describe('isMicCleanCompatible', () => {
+  it('accepts the music-mode constraint shape', () => {
+    expect(
+      isMicCleanCompatible({
+        echoCancellation: false,
+        autoGainControl: false,
+        noiseSuppression: false,
+      })
+    ).toBe(true);
+  });
+
+  it('rejects any AEC enabled', () => {
+    expect(
+      isMicCleanCompatible({
+        echoCancellation: true,
+        autoGainControl: false,
+        noiseSuppression: false,
+      })
+    ).toBe(false);
+  });
+
+  it('rejects AGC enabled', () => {
+    expect(
+      isMicCleanCompatible({
+        echoCancellation: false,
+        autoGainControl: true,
+        noiseSuppression: false,
+      })
+    ).toBe(false);
+  });
+
+  it('rejects noise suppression enabled', () => {
+    expect(
+      isMicCleanCompatible({
+        echoCancellation: false,
+        autoGainControl: false,
+        noiseSuppression: true,
+      })
+    ).toBe(false);
+  });
+
+  it('handles missing keys (treat as default-on per spec)', () => {
+    expect(isMicCleanCompatible({})).toBe(false);
   });
 });
