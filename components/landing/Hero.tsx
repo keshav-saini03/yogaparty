@@ -1,6 +1,15 @@
 import Link from 'next/link';
 
-export function Hero() {
+type Props = {
+  signedIn?: boolean;
+  resumeRoomId?: string | null;
+};
+
+export function Hero({ signedIn = false, resumeRoomId = null }: Props) {
+  const ctaHref =
+    signedIn && resumeRoomId ? `/room/${resumeRoomId}` : '/signup';
+  const ctaLabel = signedIn ? 'Back to your room' : 'Join a Watch Party';
+
   return (
     <div className="relative">
       <div className="rise" style={{ animationDelay: '120ms' }}>
@@ -32,12 +41,14 @@ export function Hero() {
         className="rise mt-10 flex items-center gap-6"
         style={{ animationDelay: '560ms' }}
       >
-        <Link href="/signup" className="cta">
-          Join a Watch Party
+        <Link href={ctaHref} className="cta">
+          {ctaLabel}
           <span className="arrow" aria-hidden />
         </Link>
         <span className="font-mono text-[0.7rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)] hidden sm:inline">
-          No OTP · 3 fields · 30 sec
+          {signedIn
+            ? 'You\u2019re signed in · cookie remembers you'
+            : 'No OTP · 3 fields · 30 sec'}
         </span>
       </div>
     </div>

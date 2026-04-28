@@ -1,10 +1,19 @@
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { LoginForm } from '@/components/login/LoginForm';
+import { redirectIfSignedIn } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
-export default function LoginPage() {
+type Search = Promise<{ next?: string }>;
+
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams?: Search;
+}) {
+  const params = (await searchParams) ?? {};
+  await redirectIfSignedIn(params.next);
   return (
     <main className="min-h-screen relative overflow-hidden">
       <header className="border-b border-[color:var(--line)]">

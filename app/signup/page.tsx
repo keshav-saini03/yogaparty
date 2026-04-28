@@ -2,10 +2,19 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { SignupForm } from '@/components/signup/SignupForm';
 import { getDetectedCity } from '@/lib/geo';
+import { redirectIfSignedIn } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SignupPage() {
+type Search = Promise<{ next?: string }>;
+
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams?: Search;
+}) {
+  const params = (await searchParams) ?? {};
+  await redirectIfSignedIn(params.next);
   const city = await getDetectedCity();
 
   return (

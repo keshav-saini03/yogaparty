@@ -6,6 +6,8 @@ import { CounterPlaceholder } from '@/components/landing/CounterPlaceholder';
 import { ReferralCapture } from '@/components/landing/ReferralCapture';
 import { createClient } from '@/lib/supabase/server';
 import { getDetectedCity } from '@/lib/geo';
+import { resolveSession } from '@/lib/session';
+import { findOrCreateCityRoom } from '@/lib/rooms';
 
 // Defeat any caching — counts must be fresh-ish on every visit.
 export const dynamic = 'force-dynamic';
@@ -53,7 +55,22 @@ async function getStats(city: string | null) {
 
 export default async function Landing() {
   const city = await getDetectedCity();
-  const stats = await getStats(city);
+  const [stats, session] = await Promise.all([
+    getStats(city),
+    resolveSession(),
+  ]);
+
+  let resumeRoomId: string | null = null;
+  if (session) {
+    try {
+      const room = await findOrCreateCityRoom(session.city);
+      resumeRoomId = room.id;
+    } catch {
+      // If we can't resolve a room, fall back to the standard CTA. The
+      // user can still go through /signup or /login.
+      resumeRoomId = null;
+    }
+  }
 
   return (
     <main className="min-h-screen relative overflow-hidden">
@@ -77,12 +94,23 @@ export default async function Landing() {
             >
               Browse rooms →
             </Link>
-            <Link
-              href="/login"
-              className="font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)] hover:text-[color:var(--accent)] transition-colors"
-            >
-              Sign in
-            </Link>
+            {session ? (
+              resumeRoomId && (
+                <Link
+                  href={`/room/${resumeRoomId}`}
+                  className="font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--accent)] hover:underline"
+                >
+                  Your room →
+                </Link>
+              )
+            ) : (
+              <Link
+                href="/login"
+                className="font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)] hover:text-[color:var(--accent)] transition-colors"
+              >
+                Sign in
+              </Link>
+            )}
           </div>
         </div>
       </header>
@@ -91,7 +119,7 @@ export default async function Landing() {
       <section className="mx-auto max-w-6xl px-6 pt-16 pb-12 sm:pt-24 sm:pb-20 relative">
         <div className="grid lg:grid-cols-[1.4fr_1fr] gap-12 lg:gap-20 items-start">
           <div>
-            <Hero />
+            <Hero signedIn={!!session} resumeRoomId={resumeRoomId} />
             <SocialProof
               city={city}
               cityCount={stats.cityCount}
