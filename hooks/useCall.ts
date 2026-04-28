@@ -49,6 +49,14 @@ type Args = {
    * cycles is too late.
    */
   onStreamAcquired?: (stream: MediaStream) => Promise<void> | void;
+  /**
+   * Called whenever this client's `on_call_intent` flips. The orchestrator
+   * mirrors it into a ref so the channel's SUBSCRIBED callback can track
+   * with the *current* intent on (re)connect. Without this, every reconnect
+   * resets server-side presence to `on_call_intent: false`, and other peers
+   * never see us as on-call.
+   */
+  onCallIntentChange?: (intent: boolean) => void;
 };
 
 const PERMISSION_DENIED_NAMES = new Set(['NotAllowedError', 'PermissionDeniedError']);
@@ -71,6 +79,10 @@ export function useCall(args: Args) {
 
   const updatePresence = useCallback(async (onCallIntent: boolean) => {
     const a = argsRef.current;
+    // Mirror intent into the orchestrator's ref FIRST, so even if the channel
+    // is null / the track call fails / a reconnect fires before the user's
+    // next action, the SUBSCRIBED callback re-tracks with the right value.
+    a.onCallIntentChange?.(onCallIntent);
     if (!a.channel) return;
     const payload: Partial<CallPresenceExtras> = {
       user_id: a.selfId,
@@ -79,10 +91,11 @@ export function useCall(args: Args) {
       joined_at: a.selfJoinedAt ?? Date.now(),
       on_call_intent: onCallIntent,
     };
+    console.log('[rtc] updatePresence', { intent: onCallIntent });
     try {
       await a.channel.track(payload as never);
-    } catch {
-      /* presence may not be subscribed yet; ignore */
+    } catch (err) {
+      console.warn('[rtc] updatePresence: track failed', (err as Error).message);
     }
   }, []);
 

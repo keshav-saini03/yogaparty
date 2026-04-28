@@ -79,6 +79,10 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   const isHostRef = useRef(false);
   const selfIdRef = useRef(self.user_id);
   selfIdRef.current = self.user_id;
+  // Mirrors useCall's on_call_intent so the SUBSCRIBED handler can track
+  // with the current value on (re)connect. Without this, reconnects reset
+  // server-side presence to false and peers never see us as on-call.
+  const callIntentRef = useRef(false);
 
   const { hostId, isHost, host } = usePresence(participants, self);
   isHostRef.current = isHost;
@@ -146,6 +150,9 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     onClosePeer: peers.closePeer,
     onCloseAll: peers.closeAll,
     onStreamAcquired: peers.attachLocalStream,
+    onCallIntentChange: (intent) => {
+      callIntentRef.current = intent;
+    },
   });
 
   // Keep `getLocalStream` returning the latest stream after `useCall` acquires it.
@@ -226,7 +233,12 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
         string,
         Participant[]
       >;
-      setParticipants(dedupePresence(state));
+      const deduped = dedupePresence(state);
+      console.log(
+        '[rtc] presence sync',
+        deduped.map((p) => ({ uid: p.user_id, intent: p.on_call_intent }))
+      );
+      setParticipants(deduped);
     };
     ch.on('presence', { event: 'sync' }, syncPresence);
     ch.on('presence', { event: 'join' }, syncPresence);
@@ -381,12 +393,19 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     // ── Subscribe + track presence on each (re)connect ───────────
     ch.subscribe(async (status) => {
       if (status === 'SUBSCRIBED') {
+        // Track with the CURRENT on_call_intent. Hard-coding `false` here
+        // creates a race: any user-initiated track({on_call_intent: true})
+        // queued before SUBSCRIBED gets clobbered by this default, and any
+        // websocket reconnect after going on-call resets server-side
+        // presence to false → other peers never see us as on-call.
+        const intent = callIntentRef.current;
+        console.log('[rtc] subscribe → track', { intent });
         await ch.track({
           user_id: self.user_id,
           name: self.name,
           city: self.city,
           joined_at: Date.now(),
-          on_call_intent: false,
+          on_call_intent: intent,
         });
         setIsReady(true);
       }
