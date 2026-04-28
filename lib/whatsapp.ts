@@ -53,10 +53,6 @@ function cleanCity(city: string | null | undefined): string {
 
 /**
  * Trigger 1 — post-signup (the user just landed in their room).
- *
- * Spec template:
- *   "Main abhi Habuild yoga dekh raha hun 23 logon ke saath!
- *    Tu bhi aaja → yogaparty.vercel.app?ref={userId}"
  */
 export function postSignupCopy({ cityCount, cityName, refId }: CopyArgs): string {
   const link = withRef(getAppUrl(), refId);
@@ -64,15 +60,15 @@ export function postSignupCopy({ cityCount, cityName, refId }: CopyArgs): string
   const city = cleanCity(cityName);
 
   if (count >= 2 && city) {
-    return `Main abhi Habuild yoga dekh raha hun ${count} logon ke saath ${city} se! Tu bhi aaja → ${link}`;
+    return `Main abhi watch party mein hun ${count} logon ke saath ${city} se! Tu bhi aaja → ${link}`;
   }
   if (count >= 2) {
-    return `Main abhi Habuild yoga dekh raha hun ${count} logon ke saath! Tu bhi aaja → ${link}`;
+    return `Main abhi watch party mein hun ${count} logon ke saath! Tu bhi aaja → ${link}`;
   }
   if (city) {
-    return `Yoga watch party shuru karu ${city} se. Tu bhi aaja → ${link}`;
+    return `Watch party shuru karu ${city} se. Tu bhi aaja → ${link}`;
   }
-  return `Ek yoga watch party chal rahi hai, aaja mere saath → ${link}`;
+  return `Ek watch party chal rahi hai, aaja mere saath → ${link}`;
 }
 
 /**
@@ -85,12 +81,12 @@ export function inRoomInviteCopy(args: CopyArgs): string {
   const count = typeof args.cityCount === 'number' && args.cityCount > 0 ? args.cityCount : 0;
 
   if (count >= 2 && city) {
-    return `${count} log ${city} se yoga kar rahe hain abhi. Tu bhi aaja → ${link}`;
+    return `${count} log ${city} se watch party mein hain abhi. Tu bhi aaja → ${link}`;
   }
   if (city) {
-    return `${city} ki watch party mein aaja, mere saath yoga karte hain → ${link}`;
+    return `${city} ki watch party mein aaja, mere saath dekhte hain → ${link}`;
   }
-  return `Yoga watch party chal rahi hai, mere saath aaja → ${link}`;
+  return `Watch party chal rahi hai, mere saath aaja → ${link}`;
 }
 
 /**
@@ -109,20 +105,16 @@ export function cityCompetitionCopy({ cityName, refId }: CopyArgs): string {
 
 /**
  * Trigger 4 — post-session (Phase 7 polish). Exposed here for that phase.
- *
- * Spec template:
- *   "Abhi 23 logon ke saath yoga kiya Mumbai se 🧘
- *    Tu bhi try kar → yogaparty.vercel.app?ref={userId}"
  */
 export function postSessionCopy({ cityCount, cityName, refId }: CopyArgs): string {
   const link = withRef(getAppUrl(), refId);
   const count = typeof cityCount === 'number' && cityCount > 0 ? cityCount : 0;
   const city = cleanCity(cityName);
   if (count >= 2 && city) {
-    return `Abhi ${count} logon ke saath yoga kiya ${city} se 🧘 Tu bhi try kar → ${link}`;
+    return `Abhi ${count} logon ke saath watch party kiya ${city} se. Tu bhi try kar → ${link}`;
   }
   if (city) {
-    return `Abhi yoga kiya ${city} se 🧘 Tu bhi try kar → ${link}`;
+    return `Abhi watch party kiya ${city} se. Tu bhi try kar → ${link}`;
   }
-  return `Abhi yoga watch party kiya 🧘 Tu bhi try kar → ${link}`;
+  return `Abhi watch party kiya. Tu bhi try kar → ${link}`;
 }

@@ -5,18 +5,17 @@ export type CuratedVideo = {
   thumbnail?: string;
 };
 
-// Placeholder Habuild yoga IDs — to be replaced pre-demo with the real curated list.
-// All videos must have embedding enabled (YouTube → embed=true).
+// Curated session IDs — all must have embedding enabled (YouTube → embed=true).
 export const CURATED_VIDEOS: readonly CuratedVideo[] = [
   {
     id: 'inpok4MKVLM',
-    title: 'Morning yoga · 10 min energy flow',
+    title: 'Morning · 10 min energy flow',
     durationSec: 600,
     thumbnail: 'https://i.ytimg.com/vi/inpok4MKVLM/hqdefault.jpg',
   },
   {
     id: 'v7AYKMP6rOE',
-    title: 'Evening calm · 20 min wind-down',
+    title: 'Evening · 20 min wind-down',
     durationSec: 1200,
     thumbnail: 'https://i.ytimg.com/vi/v7AYKMP6rOE/hqdefault.jpg',
   },

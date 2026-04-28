@@ -46,7 +46,7 @@ export function Hero({ signedIn = false }: Props) {
         <span className="font-mono text-[0.7rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)] hidden sm:inline">
           {signedIn
             ? 'Pick a public room or paste a private code'
-            : 'No OTP · 3 fields · 30 sec'}
+            : 'Three fields · Thirty seconds · You\u2019re in'}
         </span>
       </div>
     </div>

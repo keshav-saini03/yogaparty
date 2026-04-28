@@ -68,11 +68,11 @@ export function Player({
   const enforceRef = useRef<number | null | undefined>(enforceState);
   enforceRef.current = enforceState;
 
-  // Local mute / volume state. Personal — never broadcast.
-  // Viewers start muted (autoplay), hosts start unmuted.
-  const [muted, setMuted] = useState<boolean>(!isHost);
-  const [volume, setVolume] = useState<number>(80);
+  // Local volume state. Personal — never broadcast. Mute is implicit
+  // (volume === 0). Viewers start at 0 to satisfy autoplay; hosts at 80.
+  const [volume, setVolume] = useState<number>(isHost ? 80 : 0);
   const [ready, setReady] = useState(false);
+  const muted = volume === 0;
 
   // Push mute/volume to the iframe when our state changes (or when the
   // player becomes ready).
@@ -80,13 +80,15 @@ export function Player({
     const p = ytRef.current;
     if (!p || !ready) return;
     try {
-      if (muted) p.mute?.();
-      else p.unMute?.();
-      p.setVolume?.(volume);
+      if (volume === 0) p.mute?.();
+      else {
+        p.unMute?.();
+        p.setVolume?.(volume);
+      }
     } catch {
       // player may have been destroyed mid-update; safe to ignore
     }
-  }, [muted, volume, ready]);
+  }, [volume, ready]);
 
   // Imperative load when videoId changes — avoid full unmount/remount.
   useEffect(() => {
@@ -200,42 +202,83 @@ export function Player({
         />
       )}
 
-      {/* Personal audio control overlay — sits above the click-shield.
-          Mute toggle + volume slider. Affects only this client's iframe. */}
-      <div className="absolute right-3 bottom-3 z-20 flex items-center gap-2">
-        <div className="hidden sm:flex items-center gap-2 bg-black/70 border border-[color:var(--line)] px-2 py-1">
-          <span
-            className="font-mono text-[0.55rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)]"
-            aria-hidden
-          >
-            Vol
-          </span>
-          <input
-            type="range"
-            min={0}
-            max={100}
-            step={5}
-            value={volume}
-            onChange={(e) => {
-              const next = Number(e.target.value);
-              setVolume(next);
-              if (next === 0) setMuted(true);
-              else if (muted) setMuted(false);
-            }}
-            aria-label="Volume"
-            style={{ width: '5rem', accentColor: 'var(--accent)' }}
-          />
-        </div>
-        <button
-          type="button"
-          onClick={() => setMuted((m) => !m)}
-          className="bg-black/70 border border-[color:var(--line)] hover:border-[color:var(--accent)] text-[color:var(--ink)] font-mono text-[0.65rem] tracking-[0.18em] uppercase px-2 py-1 transition-colors"
-          aria-label={muted ? 'Unmute' : 'Mute'}
-          aria-pressed={muted ? 'true' : 'false'}
+      {/* Personal audio control — broadcast-style volume bar. Sits above the
+          click-shield. Affects only this client. Volume of 0 == mute (no
+          separate toggle). */}
+      <VolumeBar volume={volume} muted={muted} onChange={setVolume} />
+    </div>
+  );
+}
+
+// Broadcast-style volume control. Custom-styled native range input so we keep
+// keyboard + screenreader semantics, with a stroke-based speaker glyph whose
+// wave count animates with the level. Filled portion uses --accent so the
+// control reads at a glance even on a noisy thumbnail.
+function VolumeBar({
+  volume,
+  muted,
+  onChange,
+}: {
+  volume: number;
+  muted: boolean;
+  onChange: (next: number) => void;
+}) {
+  const pct = Math.max(0, Math.min(100, volume));
+  const waves = muted ? 0 : pct >= 66 ? 2 : pct >= 25 ? 1 : 0;
+  return (
+    <div className="absolute right-2 bottom-2 sm:right-3 sm:bottom-3 z-20">
+      <div
+        className="flex items-center gap-2 sm:gap-3 bg-black/75 backdrop-blur-[2px] border border-[color:var(--line)] hover:border-[color:var(--accent)] transition-colors px-2.5 py-1.5"
+        data-muted={muted ? 'true' : 'false'}
+      >
+        <span
+          className="font-mono text-[0.55rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)] hidden sm:inline"
+          aria-hidden
         >
-          {muted ? '🔇 Unmute' : '🔊 Mute'}
-        </button>
+          Vol
+        </span>
+        <SpeakerGlyph waves={waves} muted={muted} />
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={volume}
+          onChange={(e) => onChange(Number(e.target.value))}
+          aria-label={muted ? 'Volume (muted)' : `Volume ${pct} percent`}
+          aria-valuetext={muted ? 'Muted' : `${pct} percent`}
+          className="vu-slider"
+          style={{ ['--vu-pct' as string]: `${pct}%` }}
+        />
+        <span
+          className="font-mono tabular-nums text-[0.6rem] tracking-[0.08em] text-[color:var(--ink-soft)] min-w-[1.75rem] text-right"
+          aria-hidden
+        >
+          {muted ? '—' : String(pct).padStart(2, '0')}
+        </span>
       </div>
     </div>
+  );
+}
+
+function SpeakerGlyph({ waves, muted }: { waves: 0 | 1 | 2; muted: boolean }) {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke={muted ? 'var(--ink-mute)' : 'var(--accent)'}
+      strokeWidth="1.4"
+      strokeLinecap="square"
+      strokeLinejoin="miter"
+      className="transition-colors"
+      aria-hidden
+    >
+      <path d="M2 6h2.5L8 3v10L4.5 10H2z" />
+      {muted && <path d="M11 6l4 4M15 6l-4 4" />}
+      {!muted && waves >= 1 && <path d="M11 6.2c0.9 1 0.9 2.6 0 3.6" />}
+      {!muted && waves >= 2 && <path d="M13 4.5c2 1.9 2 5.1 0 7" />}
+    </svg>
   );
 }

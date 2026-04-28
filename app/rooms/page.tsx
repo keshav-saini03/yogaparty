@@ -6,6 +6,8 @@ import { getDetectedCity } from '@/lib/geo';
 import { PublicRoomCard } from '@/components/rooms/PublicRoomCard';
 import { CreateRoomForm } from '@/components/rooms/CreateRoomForm';
 import { JoinByCodeForm } from '@/components/rooms/JoinByCodeForm';
+import { SignOutButton } from '@/components/share/SignOutButton';
+import { resolveSession } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -29,9 +31,10 @@ async function getViewerCity(): Promise<string | null> {
 }
 
 export default async function RoomsDirectoryPage() {
-  const [rooms, viewerCity] = await Promise.all([
+  const [rooms, viewerCity, session] = await Promise.all([
     listPublicRooms(50),
     getViewerCity(),
+    resolveSession(),
   ]);
 
   const { inYourCity, elsewhere } = splitPublicRoomsByCity(rooms, viewerCity);
@@ -53,9 +56,12 @@ export default async function RoomsDirectoryPage() {
           >
             ← Watch · Party
           </Link>
-          <span className="ml-auto font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)]">
-            Directory
-          </span>
+          <div className="ml-auto flex items-center gap-3 sm:gap-4">
+            <span className="font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--ink-mute)]">
+              Directory
+            </span>
+            {session && <SignOutButton />}
+          </div>
         </div>
       </header>
 

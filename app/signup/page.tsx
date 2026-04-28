@@ -51,8 +51,8 @@ export default async function SignupPage({
               </span>
             </h1>
             <p className="mt-8 max-w-md text-[color:var(--ink-soft)] leading-relaxed">
-              No password. No OTP. No email. Just enough to count you in and
-              put you in the same room as people from{' '}
+              Just enough to count you in and put you in the same room as
+              people from{' '}
               <span className="font-mono uppercase tracking-[0.12em] text-[color:var(--ink)]">
                 {city ?? 'your city'}
               </span>

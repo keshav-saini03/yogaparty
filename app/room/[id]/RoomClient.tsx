@@ -306,7 +306,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
                     You&apos;re tuned in
                   </p>
                   <p className="mt-1.5 font-display text-base sm:text-lg leading-snug text-[color:var(--ink)]">
-                    Drop the link in your group — yoga is better with people.
+                    Drop the link in your group — it&apos;s better with people.
                   </p>
                 </div>
                 <div className="flex items-center gap-2 flex-shrink-0">

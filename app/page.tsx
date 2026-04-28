@@ -4,6 +4,7 @@ import { SocialProof } from '@/components/landing/SocialProof';
 import { CityPreview } from '@/components/landing/CityPreview';
 import { CounterPlaceholder } from '@/components/landing/CounterPlaceholder';
 import { ReferralCapture } from '@/components/landing/ReferralCapture';
+import { SignOutButton } from '@/components/share/SignOutButton';
 import { createClient } from '@/lib/supabase/server';
 import { getDetectedCity } from '@/lib/geo';
 import { resolveSession } from '@/lib/session';
@@ -82,9 +83,17 @@ export default async function Landing() {
               Browse rooms →
             </Link>
             {session ? (
-              <span className="font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--accent)]">
-                Signed in
-              </span>
+              <div className="flex items-center gap-3 sm:gap-4">
+                <span className="font-mono text-[0.65rem] sm:text-[0.7rem] tracking-[0.2em] uppercase text-[color:var(--accent)] flex items-center gap-2">
+                  <span className="hidden sm:inline">Signed in</span>
+                  <span className="sm:hidden">In</span>
+                  <span className="text-[color:var(--ink-faint)]">·</span>
+                  <span className="text-[color:var(--ink)] truncate max-w-[6rem] sm:max-w-[10rem]">
+                    {session.name}
+                  </span>
+                </span>
+                <SignOutButton />
+              </div>
             ) : (
               <Link
                 href="/login"

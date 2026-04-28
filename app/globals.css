@@ -175,3 +175,113 @@ body {
   text-transform: uppercase;
   color: var(--ink-mute);
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   Broadcast volume slider (.vu-slider)
+   Custom-styled <input type="range"> that reads like a level meter.
+   Track: 2px hairline, accent fills up to --vu-pct.
+   Thumb: 10×10 yellow square; pops to 12×16 on hover, signaling grip.
+   --vu-pct must be set inline (e.g. style={{ '--vu-pct': '64%' }})
+   ───────────────────────────────────────────────────────────────── */
+.vu-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 6.5rem;
+  height: 1.25rem;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+  --vu-pct: 0%;
+}
+@media (min-width: 640px) {
+  .vu-slider { width: 8rem; }
+}
+.vu-slider:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 4px;
+}
+
+/* Track — webkit */
+.vu-slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background:
+    linear-gradient(
+      to right,
+      var(--accent) 0%,
+      var(--accent) var(--vu-pct),
+      var(--ink-faint) var(--vu-pct),
+      var(--ink-faint) 100%
+    );
+  border-radius: 0;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4);
+}
+.vu-slider::-moz-range-track {
+  height: 2px;
+  background: var(--ink-faint);
+  border-radius: 0;
+}
+.vu-slider::-moz-range-progress {
+  height: 2px;
+  background: var(--accent);
+}
+
+/* Thumb — webkit */
+.vu-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 0.625rem;
+  height: 0.625rem;
+  margin-top: -0.28125rem; /* (track 2px - thumb 10px) / 2 */
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 0;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 0 8px rgba(245, 180, 0, 0.4);
+  transition: width 160ms ease, height 160ms ease, transform 160ms ease;
+}
+.vu-slider:hover::-webkit-slider-thumb,
+.vu-slider:focus-visible::-webkit-slider-thumb {
+  width: 0.75rem;
+  height: 1rem;
+  margin-top: -0.469rem;
+}
+.vu-slider:active::-webkit-slider-thumb {
+  background: #ffc922;
+}
+
+/* Thumb — firefox */
+.vu-slider::-moz-range-thumb {
+  width: 0.625rem;
+  height: 0.625rem;
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 0;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.5),
+    0 0 8px rgba(245, 180, 0, 0.4);
+  transition: width 160ms ease, height 160ms ease;
+}
+.vu-slider:hover::-moz-range-thumb,
+.vu-slider:focus-visible::-moz-range-thumb {
+  width: 0.75rem;
+  height: 1rem;
+}
+
+/* Muted state — desaturate the chrome */
+[data-muted='true'] .vu-slider::-webkit-slider-runnable-track {
+  background:
+    linear-gradient(
+      to right,
+      var(--ink-mute) 0%,
+      var(--ink-mute) var(--vu-pct),
+      var(--ink-faint) var(--vu-pct),
+      var(--ink-faint) 100%
+    );
+}
+[data-muted='true'] .vu-slider::-webkit-slider-thumb,
+[data-muted='true'] .vu-slider::-moz-range-thumb {
+  background: var(--ink-mute);
+  border-color: var(--ink-mute);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
+}

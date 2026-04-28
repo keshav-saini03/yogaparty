@@ -111,7 +111,7 @@ describe('postSignupCopy', () => {
 
   it('falls back to neutral copy when nothing known', () => {
     const out = postSignupCopy({});
-    expect(out).toContain('yoga watch party');
+    expect(out).toContain('watch party');
   });
 
   it('omits ?ref when refId is invalid', () => {
@@ -129,7 +129,7 @@ describe('inRoomInviteCopy', () => {
   });
 
   it('falls back to neutral when no city/count', () => {
-    expect(inRoomInviteCopy({ refId: VALID_UUID })).toContain('Yoga watch party');
+    expect(inRoomInviteCopy({ refId: VALID_UUID })).toContain('Watch party');
   });
 });
 
@@ -158,7 +158,7 @@ describe('postSessionCopy', () => {
   });
 
   it('renders neutral variant when nothing known', () => {
-    expect(postSessionCopy({})).toContain('yoga watch party');
+    expect(postSessionCopy({})).toContain('watch party');
   });
 });
 

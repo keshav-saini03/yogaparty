@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { WhatsAppShareButton } from '@/components/share/WhatsAppShareButton';
+import { SignOutButton } from '@/components/share/SignOutButton';
 import { inRoomInviteCopy } from '@/lib/whatsapp';
 
 type Props = {
@@ -71,6 +72,8 @@ export function RoomHeader({
               {isMobileChatOpen ? 'Close' : 'Chat'}
             </button>
           )}
+
+          <SignOutButton />
         </div>
       </div>
     </header>

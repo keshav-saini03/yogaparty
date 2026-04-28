@@ -49,8 +49,8 @@ export default async function LoginPage({
               </span>
             </h1>
             <p className="mt-8 max-w-md text-[color:var(--ink-soft)] leading-relaxed">
-              No password to remember. Punch in the phone you signed up with and
-              we&apos;ll drop you back in your city&apos;s room.
+              Punch in the phone you signed up with and we&apos;ll drop you
+              back into your city&apos;s lobby.
             </p>
 
             <ul className="mt-10 space-y-3 font-mono text-[0.78rem] tracking-[0.16em] uppercase text-[color:var(--ink-mute)]">
@@ -60,11 +60,11 @@ export default async function LoginPage({
               </li>
               <li className="flex items-center gap-3">
                 <span className="text-[color:var(--accent)]">02</span>
-                <span>No OTP, no waiting</span>
+                <span>One tap, you&apos;re back</span>
               </li>
               <li className="flex items-center gap-3">
                 <span className="text-[color:var(--accent)]">03</span>
-                <span>Right back in the room</span>
+                <span>Same seat, same people</span>
               </li>
             </ul>
           </div>
