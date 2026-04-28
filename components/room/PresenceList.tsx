@@ -44,11 +44,7 @@ export function PresenceList({
             }`}
           >
             {isSpeaking && (
-              <span
-                aria-hidden
-                className="pulse-dot"
-                style={{ background: 'var(--accent)' }}
-              />
+              <span aria-hidden className="pulse-dot pulse-dot--accent" />
             )}
             <span
               className={`truncate ${
