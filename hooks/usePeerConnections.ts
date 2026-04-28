@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   PC_CONFIG,
@@ -83,7 +83,7 @@ export function usePeerConnections(args: Args): PeerConnections {
       slotsRef.current.delete(peerId);
       args.onPeerDropped?.(peerId);
     },
-    [args]
+    [args.onPeerDropped]
   );
 
   const buildPc = useCallback(
@@ -116,6 +116,36 @@ export function usePeerConnections(args: Args): PeerConnections {
 
       const slot: Slot = { pc, restartedOnce: false, graceTimer: null };
 
+      const handleFailureRecovery = () => {
+        if (slot.graceTimer !== null) {
+          window.clearTimeout(slot.graceTimer);
+          slot.graceTimer = null;
+        }
+        if (!slot.restartedOnce) {
+          slot.restartedOnce = true;
+          // Re-offer with iceRestart: true (spec §8.2).
+          (async () => {
+            try {
+              const offer = await pc.createOffer({ iceRestart: true });
+              await pc.setLocalDescription(offer);
+              send(WEBRTC_EVENTS.OFFER, {
+                from: args.selfId,
+                to: peerId,
+                sdp: offer.sdp ?? '',
+                sentAt: Date.now(),
+              });
+            } catch {
+              // Peer may have left or PC is wedged; drop the slot so we
+              // don't leave it stuck with restartedOnce=true forever.
+              closeSlot(peerId);
+            }
+          })();
+          return;
+        }
+        // Second failure → drop.
+        closeSlot(peerId);
+      };
+
       pc.oniceconnectionstatechange = () => {
         const s = pc.iceConnectionState;
         if (s === 'connected' || s === 'completed') {
@@ -128,36 +158,17 @@ export function usePeerConnections(args: Args): PeerConnections {
         if (s === 'disconnected') {
           if (slot.graceTimer !== null) return;
           slot.graceTimer = window.setTimeout(() => {
-            // Promoted from disconnected to failed — handled by next branch.
+            // Browsers (notably Firefox) may sit in 'disconnected' forever
+            // without promoting to 'failed'. Drive recovery ourselves if
+            // the state hasn't recovered after the grace window.
+            if (pc.iceConnectionState === 'disconnected') {
+              handleFailureRecovery();
+            }
           }, ICE_DISCONNECTED_GRACE_MS);
           return;
         }
         if (s === 'failed') {
-          if (slot.graceTimer !== null) {
-            window.clearTimeout(slot.graceTimer);
-            slot.graceTimer = null;
-          }
-          if (!slot.restartedOnce) {
-            slot.restartedOnce = true;
-            // Re-offer with iceRestart: true (spec §8.2).
-            (async () => {
-              try {
-                const offer = await pc.createOffer({ iceRestart: true });
-                await pc.setLocalDescription(offer);
-                send(WEBRTC_EVENTS.OFFER, {
-                  from: args.selfId,
-                  to: peerId,
-                  sdp: offer.sdp ?? '',
-                  sentAt: Date.now(),
-                });
-              } catch {
-                /* peer may have left; cleanup happens on next failed event */
-              }
-            })();
-            return;
-          }
-          // Second failure → drop.
-          closeSlot(peerId);
+          handleFailureRecovery();
           return;
         }
         if (s === 'closed') {
@@ -167,7 +178,7 @@ export function usePeerConnections(args: Args): PeerConnections {
 
       return slot;
     },
-    [args, send, closeSlot]
+    [args.selfId, args.getLocalStream, args.onRemoteStream, send, closeSlot]
   );
 
   const ensureSlot = useCallback(
@@ -262,14 +273,26 @@ export function usePeerConnections(args: Args): PeerConnections {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  return {
-    createOfferTo,
-    handleOffer,
-    handleAnswer,
-    handleIce,
-    closePeer,
-    closeAll,
-    replaceVideoTrackEverywhere,
-    peerIds,
-  };
+  return useMemo(
+    () => ({
+      createOfferTo,
+      handleOffer,
+      handleAnswer,
+      handleIce,
+      closePeer,
+      closeAll,
+      replaceVideoTrackEverywhere,
+      peerIds,
+    }),
+    [
+      createOfferTo,
+      handleOffer,
+      handleAnswer,
+      handleIce,
+      closePeer,
+      closeAll,
+      replaceVideoTrackEverywhere,
+      peerIds,
+    ]
+  );
 }

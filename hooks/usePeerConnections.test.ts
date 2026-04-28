@@ -303,6 +303,78 @@ describe('usePeerConnections — failure recovery', () => {
   });
 });
 
+describe('usePeerConnections — disconnected grace promotion', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('promotes disconnected to restart-ice after the grace window', async () => {
+    const channel = makeChannel();
+    const { result } = renderHook(() =>
+      usePeerConnections({
+        selfId: 'self',
+        channel: channel as never,
+        getLocalStream: () => null,
+      })
+    );
+
+    await act(async () => {
+      await result.current.createOfferTo('peer-1');
+    });
+
+    const pc = MockRTCPeerConnection.instances[0];
+    pc.createOffer.mockClear();
+
+    await act(async () => {
+      pc.iceConnectionState = 'disconnected';
+      pc.oniceconnectionstatechange?.();
+    });
+
+    expect(pc.createOffer).not.toHaveBeenCalled(); // not yet — still in grace window
+
+    await act(async () => {
+      vi.advanceTimersByTime(5_000); // ICE_DISCONNECTED_GRACE_MS
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(pc.createOffer).toHaveBeenCalledWith({ iceRestart: true });
+  });
+
+  it('clears the grace timer when state recovers to connected', async () => {
+    const channel = makeChannel();
+    const { result } = renderHook(() =>
+      usePeerConnections({
+        selfId: 'self',
+        channel: channel as never,
+        getLocalStream: () => null,
+      })
+    );
+
+    await act(async () => {
+      await result.current.createOfferTo('peer-1');
+    });
+
+    const pc = MockRTCPeerConnection.instances[0];
+    pc.createOffer.mockClear();
+
+    await act(async () => {
+      pc.iceConnectionState = 'disconnected';
+      pc.oniceconnectionstatechange?.();
+      pc.iceConnectionState = 'connected';
+      pc.oniceconnectionstatechange?.();
+      vi.advanceTimersByTime(10_000);
+      await Promise.resolve();
+    });
+
+    expect(pc.createOffer).not.toHaveBeenCalled();
+  });
+});
+
 describe('usePeerConnections — replaceVideoTrackEverywhere', () => {
   it('calls replaceTrack on every video sender', async () => {
     const channel = makeChannel();
