@@ -36,9 +36,10 @@ export function PeerTile({
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
-    if (videoRef.current && stream) {
-      videoRef.current.srcObject = stream;
-    }
+    if (!videoRef.current) return;
+    // Clear when stream goes null too, otherwise the <video> keeps showing
+    // the last frame after camera-off / peer-disconnect.
+    videoRef.current.srcObject = stream ?? null;
   }, [stream]);
 
   const showVideo = camOn;
