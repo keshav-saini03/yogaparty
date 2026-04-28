@@ -120,7 +120,7 @@ export function useCall(args: Args) {
       }
     }
     // Intentionally narrow — argsRef holds latest
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [state, updatePresence]);
 
   const toggleMic = useCallback(async () => {
@@ -136,7 +136,7 @@ export function useCall(args: Args) {
     setMic(willEnable);
     await enterMesh();
     // Intentionally narrow — argsRef holds latest
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [state, acquireStream, enterMesh, micEnabled]);
 
   const toggleCam = useCallback(async () => {
@@ -153,7 +153,7 @@ export function useCall(args: Args) {
     await argsRef.current.onReplaceVideo?.(willEnable ? track : null);
     await enterMesh();
     // Intentionally narrow — argsRef holds latest
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [state, acquireStream, enterMesh, camEnabled]);
 
   const leave = useCallback(async () => {
@@ -179,7 +179,7 @@ export function useCall(args: Args) {
     setCam(false);
     setState('idle');
     // Intentionally narrow — argsRef holds latest
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [state, updatePresence]);
 
   // Mesh reconciliation tick — catches missed call_ends and self-heals.
