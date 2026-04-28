@@ -47,10 +47,27 @@ type Props = {
 // 2s strikes a balance between bandwidth and how long sub-threshold drift
 // can hide before being corrected.
 const HEARTBEAT_INTERVAL_MS = 2_000;
-// Drift over this many seconds triggers a correction. Tighter than the
-// historical 2s default — combined with rate-based smoothing below, the
-// correction itself is mostly imperceptible.
-const DRIFT_THRESHOLD_SEC = 0.5;
+// Drift over this many seconds triggers a correction. Wider than the old
+// 0.5s because corrections are now seek-only (rate-bend was retired —
+// YouTube's IFrame API rounds non-supported rates toward 1.0, so a
+// "subtle" 1.05× is silently a no-op and 1.25× is audibly obvious). We
+// absorb up to 1s of drift instead of papering over it with a pitch shift.
+const DRIFT_THRESHOLD_SEC = 1.0;
+// Cooldown after a seek — give the YouTube buffer time to settle before
+// we let the next heartbeat fire and possibly re-trigger a correction.
+const POST_SEEK_COOLDOWN_MS = 3_000;
+// Overshoot for seek targets to compensate for YouTube's rebuffer (which
+// stalls the iframe ~300–500 ms after a seek). Without this we land
+// behind host even when the math says "exact". 0.5 is a conservative pad.
+const SEEK_BUFFER_PAD_SEC = 0.5;
+// NTP-style clock-sync ping cadence. Viewers ping the host every
+// CLOCK_PING_INTERVAL_MS to learn (offset, rtt). The offset translates
+// the viewer's wall clock into host time so transit compensation isn't
+// fooled by device clock skew (which is routinely 100s of ms on phones).
+const CLOCK_PING_INTERVAL_MS = 10_000;
+// EWMA blend factor — newer samples contribute 30%, history 70%. Smooths
+// out transient packet-spike RTTs without lagging real network shifts.
+const CLOCK_EWMA_NEW = 0.3;
 
 export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   const [channel, setChannel] = useState<RealtimeChannel | null>(null);
@@ -66,9 +83,12 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   const playerRef = useRef<PlayerHandle | null>(null);
   const suppressNextOutboundRef = useRef(false);
   const cooldownUntilRef = useRef(0);
-  // Tracks the in-flight rate-nudge so we can revert to 1.0× when it ends.
-  // null = no nudge active.
-  const rateRevertTimerRef = useRef<number | null>(null);
+  // Clock-sync state. clockOffsetRef = host_clock − viewer_clock (in ms);
+  // 0 for the host. rttEmaRef is the smoothed round-trip in ms. Refs (not
+  // state) because we read these inside event handlers registered before
+  // subscribe — re-renders must not destroy/rebuild the listeners.
+  const clockOffsetRef = useRef(0);
+  const rttEmaRef = useRef(0);
   // Host's last broadcast play/pause intent (1=playing, 2=paused). Used by
   // viewer's <Player /> to force-correct any local divergence (e.g. user
   // clicked the iframe through DevTools / keyboard).
@@ -92,6 +112,16 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
 
   const { hostId, isHost, host } = usePresence(participants, self);
   isHostRef.current = isHost;
+
+  // Returns "host wall-clock time" in ms — Date.now() corrected by the
+  // viewer's measured offset to host. For the host this is just Date.now()
+  // (offset stays 0). useCallback with no deps keeps the identity stable
+  // across renders; the callback always reads the *current* offset via the
+  // ref, so it doesn't need to re-bind when offset changes.
+  const hostNow = useCallback(
+    () => Date.now() + clockOffsetRef.current,
+    []
+  );
 
   // ── WebRTC overlay wiring ────────────────────────────────────
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(
@@ -273,13 +303,15 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     });
 
     // ── Sync events ──────────────────────────────────────────────
-    // Compensate transit time: the host snapshotted `timestamp` at `sentAt`,
-    // so on receipt the equivalent host position is `timestamp + (now -
-    // sentAt) / 1000`. This collapses the steady-state lag from ~½ RTT to
-    // the tens of milliseconds it takes us to issue a seek/play call.
+    // Compensate transit time: the sender stamps `sentAt` in HOST time
+    // (host uses Date.now() directly; viewers use hostNow() which adds
+    // the clock-sync offset). On receipt we compute transit in host time
+    // too — `hostNow() - sentAt` — so device clock skew can't bias the
+    // estimate. Collapses steady-state lag from ~½ RTT to the tens of ms
+    // it takes us to issue a seek/play call.
     const expectedFromPayload = (p: { timestamp: number; sentAt?: number }) => {
       const transitSec = p.sentAt
-        ? Math.max(0, (Date.now() - p.sentAt) / 1000)
+        ? Math.max(0, (hostNow() - p.sentAt) / 1000)
         : 0;
       return p.timestamp + transitSec;
     };
@@ -322,28 +354,18 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
 
       const expected = expectedFromPayload(p);
       const drift = expected - playerRef.current.getCurrentTime();
-      const correction = pickCorrection(drift);
+      const correction = pickCorrection(drift, DRIFT_THRESHOLD_SEC);
 
       if (correction.kind === 'none') return;
 
-      cooldownUntilRef.current = Date.now() + 1500;
-
-      if (correction.kind === 'seek') {
-        suppressNextOutboundRef.current = true;
-        playerRef.current.seekTo(expected, true);
-        return;
-      }
-
-      // Smooth correction: bend playback rate for `durationMs`, then revert.
-      // We never compound nudges — clear any in-flight timer first.
-      if (rateRevertTimerRef.current !== null) {
-        window.clearTimeout(rateRevertTimerRef.current);
-      }
-      playerRef.current.setPlaybackRate(correction.rate);
-      rateRevertTimerRef.current = window.setTimeout(() => {
-        playerRef.current?.setPlaybackRate(1);
-        rateRevertTimerRef.current = null;
-      }, correction.durationMs);
+      // Seek-only correction. Overshoot by SEEK_BUFFER_PAD_SEC because
+      // YouTube re-buffers ~300–500 ms after a seek; without the pad the
+      // viewer resumes ~half a second behind host. Cooldown is set
+      // generously so the next heartbeat doesn't fire mid-rebuffer and
+      // mistake "still loading" for fresh drift.
+      cooldownUntilRef.current = Date.now() + POST_SEEK_COOLDOWN_MS;
+      suppressNextOutboundRef.current = true;
+      playerRef.current.seekTo(expected + SEEK_BUFFER_PAD_SEC, true);
     });
 
     ch.on('broadcast', { event: 'heartbeat' }, ({ payload }) => {
@@ -358,9 +380,11 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       if (p.user_id === selfIdRef.current) return;
 
       // Project the viewer's reported time forward by transit so we compare
-      // apples to apples (the report was snapshotted ~½ RTT ago).
+      // apples to apples. Both hostNow() and p.sentAt are in host time
+      // (viewers translate sentAt via their measured clock-offset before
+      // sending), so the delta is true wall-clock transit.
       const transitSec = p.sentAt
-        ? Math.max(0, (Date.now() - p.sentAt) / 1000)
+        ? Math.max(0, (hostNow() - p.sentAt) / 1000)
         : 0;
       const viewerTime = p.currentTime + transitSec;
       const hostTime = playerRef.current.getCurrentTime();
@@ -371,15 +395,64 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
           event: 'sync_correct',
           payload: {
             target_user_id: p.user_id,
-            // Add the standard lookahead so viewer's seek lands on the host
-            // by the time the packet arrives. For rate-nudges, the viewer
-            // recomputes drift on receipt — the lookahead just tightens the
-            // seek case.
+            // Lookahead so the viewer's seek target stays aligned with
+            // host through the in-flight transit. The viewer also adds
+            // its own SEEK_BUFFER_PAD_SEC on receipt to absorb YouTube's
+            // post-seek rebuffer.
             timestamp: correctedTimestamp(hostTime),
-            sentAt: Date.now(),
+            sentAt: hostNow(),
           },
         });
       }
+    });
+
+    // ── Clock sync (NTP-style) ───────────────────────────────────
+    // Viewers ping host with t1 = viewer-local send time. Host echoes
+    // back with t2 (recv) and t3 (send) on its own clock. Viewer reads
+    // t4 = local recv time and computes:
+    //   offset = ((t2 - t1) + (t3 - t4)) / 2     // host_clock − viewer_clock
+    //   rtt    = (t4 - t1) - (t3 - t2)
+    // Symmetric-transit assumption — fine in practice on Supabase
+    // Realtime which fans out via a single relay. Viewers translate
+    // their wall clocks into host time using `clockOffsetRef` so transit
+    // compensation isn't poisoned by device-clock skew.
+    ch.on('broadcast', { event: 'clock_ping' }, ({ payload }) => {
+      if (!isHostRef.current) return;
+      const { from, t1 } = payload as { from: string; t1: number };
+      const t2 = Date.now();
+      ch.send({
+        type: 'broadcast',
+        event: 'clock_pong',
+        payload: { to: from, t1, t2, t3: Date.now() },
+      });
+    });
+
+    ch.on('broadcast', { event: 'clock_pong' }, ({ payload }) => {
+      const { to, t1, t2, t3 } = payload as {
+        to: string;
+        t1: number;
+        t2: number;
+        t3: number;
+      };
+      if (to !== selfIdRef.current) return;
+      const t4 = Date.now();
+      const offset = (t2 - t1 + (t3 - t4)) / 2;
+      const rtt = t4 - t1 - (t3 - t2);
+      // First sample seeds the EMA. Once seeded, drop samples whose RTT
+      // is > 2× the smoothed value — a single jittery packet shouldn't
+      // pull our offset estimate around (and through it, trigger a
+      // spurious seek on the next sync_correct).
+      if (rttEmaRef.current === 0) {
+        clockOffsetRef.current = offset;
+        rttEmaRef.current = Math.max(0, rtt);
+        return;
+      }
+      if (rtt > rttEmaRef.current * 2) return;
+      clockOffsetRef.current =
+        (1 - CLOCK_EWMA_NEW) * clockOffsetRef.current + CLOCK_EWMA_NEW * offset;
+      rttEmaRef.current =
+        (1 - CLOCK_EWMA_NEW) * rttEmaRef.current +
+        CLOCK_EWMA_NEW * Math.max(0, rtt);
     });
 
     // ── WebRTC signaling ─────────────────────────────────────────
@@ -439,18 +512,8 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       // bumped activity recently (>90s). No-op for auto-city rooms (which
       // have title IS NULL). Fire-and-forget; ignore failures.
       closeRoomIfStale(roomId).catch(() => {});
-      // Cancel any pending rate-revert and put playback back to normal.
-      if (rateRevertTimerRef.current !== null) {
-        window.clearTimeout(rateRevertTimerRef.current);
-        rateRevertTimerRef.current = null;
-      }
-      try {
-        playerRef.current?.setPlaybackRate(1);
-      } catch {
-        /* player may already be torn down */
-      }
     };
-  }, [roomId, self.user_id, self.name, self.city]);
+  }, [roomId, self.user_id, self.name, self.city, hostNow]);
 
   // Activity bump: mark this room "alive" on mount and every 60s while open.
   // Powers the /rooms directory TTL filter (rooms quiet for >3 min vanish).
@@ -464,10 +527,14 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   }, [roomId, isReady]);
 
   // Heartbeat ticker — every client sends `heartbeat` at HEARTBEAT_INTERVAL_MS
-  // (currently 2s). The host (registered above) projects each viewer's
-  // currentTime forward by transit time and emits sync_correct on drift past
-  // DRIFT_THRESHOLD_SEC (currently 0.5s). cooldownUntilRef is bumped whenever
-  // this client applies a correction so we don't tight-loop on a slow seek.
+  // (2s). The host projects each viewer's currentTime forward by transit and
+  // emits sync_correct on drift past DRIFT_THRESHOLD_SEC. cooldownUntilRef
+  // is bumped whenever this client applies a correction so we don't
+  // tight-loop on a slow rebuffer.
+  //
+  // sentAt is stamped via hostNow() so when the host receives the packet,
+  // its (Date.now() - sentAt) is true wall-clock transit, not transit-plus-
+  // device-clock-skew.
   useEffect(() => {
     if (!channel || !isReady) return;
     const tick = () => {
@@ -479,13 +546,55 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
         payload: {
           user_id: self.user_id,
           currentTime: t,
-          sentAt: Date.now(),
+          sentAt: hostNow(),
         },
       });
     };
     const id = window.setInterval(tick, HEARTBEAT_INTERVAL_MS);
     return () => window.clearInterval(id);
-  }, [channel, isReady, self.user_id]);
+  }, [channel, isReady, self.user_id, hostNow]);
+
+  // Clock-sync ticker — viewers only. Host responds to pings; pinging
+  // itself is a no-op. We fire one ping at mount so the first heartbeat
+  // already carries a meaningful offset, then every CLOCK_PING_INTERVAL_MS.
+  useEffect(() => {
+    if (!channel || !isReady || isHost) return;
+    const sendPing = () => {
+      channel.send({
+        type: 'broadcast',
+        event: 'clock_ping',
+        payload: { from: self.user_id, t1: Date.now() },
+      });
+    };
+    sendPing();
+    const id = window.setInterval(sendPing, CLOCK_PING_INTERVAL_MS);
+    return () => window.clearInterval(id);
+  }, [channel, isReady, isHost, self.user_id]);
+
+  // Visibility resync — backgrounded tabs are throttled and YouTube can
+  // stall, so a viewer often comes back several seconds behind host. The
+  // 2 s heartbeat cadence is too slow to mask this. On focus, fire one
+  // immediate heartbeat so the host's next sync_correct lands by the
+  // viewer's first visible frame.
+  useEffect(() => {
+    if (!channel || !isReady || isHost) return;
+    const onVis = () => {
+      if (typeof document === 'undefined') return;
+      if (document.visibilityState !== 'visible') return;
+      const t = playerRef.current?.getCurrentTime?.() ?? 0;
+      channel.send({
+        type: 'broadcast',
+        event: 'heartbeat',
+        payload: {
+          user_id: self.user_id,
+          currentTime: t,
+          sentAt: hostNow(),
+        },
+      });
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [channel, isReady, isHost, self.user_id, hostNow]);
 
   // Auto-open picker for host on first arrival to a video-less room.
   useEffect(() => {

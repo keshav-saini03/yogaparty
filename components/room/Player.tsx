@@ -31,13 +31,6 @@ export type PlayerHandle = {
   getCurrentTime: () => number;
   getPlayerState: () => number;
   loadVideo: (videoId: string, startSec?: number) => void;
-  /**
-   * Set YouTube playback rate. Only the discrete rates returned by
-   * getAvailablePlaybackRates() are reliable — typically
-   * [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2]. Used for smooth drift
-   * correction instead of jarring seeks.
-   */
-  setPlaybackRate: (rate: number) => void;
 };
 
 export type PlayerEventName = 'play' | 'pause' | 'seek';
@@ -166,13 +159,6 @@ export function Player({
             getPlayerState: () => e.target.getPlayerState?.() ?? -1,
             loadVideo: (id: string, startSec = 0) =>
               e.target.loadVideoById(id, startSec),
-            setPlaybackRate: (rate: number) => {
-              try {
-                e.target.setPlaybackRate?.(rate);
-              } catch {
-                /* unsupported rate / detached player — ignore */
-              }
-            },
           };
           handleRef.current = handle;
           onReady?.(handle);

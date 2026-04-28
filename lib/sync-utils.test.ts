@@ -82,43 +82,21 @@ describe('correctedTimestamp', () => {
 describe('pickCorrection', () => {
   it('returns none for sub-tolerance drift', () => {
     expect(pickCorrection(0).kind).toBe('none');
-    expect(pickCorrection(0.49).kind).toBe('none');
-    expect(pickCorrection(-0.49).kind).toBe('none');
+    expect(pickCorrection(0.99).kind).toBe('none');
+    expect(pickCorrection(-0.99).kind).toBe('none');
   });
 
-  it('returns rate=1.25 when viewer is behind (positive drift)', () => {
-    const c = pickCorrection(1.0);
-    expect(c.kind).toBe('rate');
-    if (c.kind === 'rate') expect(c.rate).toBe(1.25);
+  it('returns seek when drift meets or exceeds the threshold', () => {
+    expect(pickCorrection(1.0).kind).toBe('seek');
+    expect(pickCorrection(-1.0).kind).toBe('seek');
+    expect(pickCorrection(3).kind).toBe('seek');
+    expect(pickCorrection(-12).kind).toBe('seek');
   });
 
-  it('returns rate=0.75 when viewer is ahead (negative drift)', () => {
-    const c = pickCorrection(-1.0);
-    expect(c.kind).toBe('rate');
-    if (c.kind === 'rate') expect(c.rate).toBe(0.75);
-  });
-
-  it('rate-window duration scales with drift size and is clamped', () => {
-    const small = pickCorrection(0.6);
-    if (small.kind === 'rate') {
-      expect(small.durationMs).toBeGreaterThanOrEqual(800);
-      expect(small.durationMs).toBeLessThanOrEqual(8000);
-    }
-    const big = pickCorrection(1.4);
-    if (big.kind === 'rate') {
-      expect(big.durationMs).toBeGreaterThan(small.kind === 'rate' ? small.durationMs : 0);
-    }
-  });
-
-  it('returns seek for drift at or above the large threshold', () => {
-    expect(pickCorrection(1.5).kind).toBe('seek');
-    expect(pickCorrection(-3).kind).toBe('seek');
-  });
-
-  it('honors custom thresholds', () => {
-    expect(pickCorrection(0.3, 0.2, 1).kind).toBe('rate');
-    expect(pickCorrection(0.1, 0.2, 1).kind).toBe('none');
-    expect(pickCorrection(1.1, 0.2, 1).kind).toBe('seek');
+  it('honors a custom threshold', () => {
+    expect(pickCorrection(0.3, 0.2).kind).toBe('seek');
+    expect(pickCorrection(0.1, 0.2).kind).toBe('none');
+    expect(pickCorrection(2.0, 3).kind).toBe('none');
   });
 });
 
