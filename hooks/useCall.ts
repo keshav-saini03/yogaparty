@@ -41,6 +41,14 @@ type Args = {
   onReplaceVideo?: (track: MediaStreamTrack | null) => Promise<void> | void;
   onClosePeer?: (peerId: string) => void;
   onCloseAll?: () => void;
+  /**
+   * Called the instant `getUserMedia` resolves. Lets the PC layer
+   * `replaceTrack` on any PCs that were already built without a local stream
+   * (the inbound-offer-before-permission race). Must run synchronously after
+   * `streamRef.current = stream` — anything that goes through React render
+   * cycles is too late.
+   */
+  onStreamAcquired?: (stream: MediaStream) => Promise<void> | void;
 };
 
 const PERMISSION_DENIED_NAMES = new Set(['NotAllowedError', 'PermissionDeniedError']);
@@ -91,6 +99,11 @@ export function useCall(args: Args) {
         audio: stream.getAudioTracks().length,
         video: stream.getVideoTracks().length,
       });
+      // Attach the freshly-acquired tracks to any PCs that were built before
+      // we had a stream (inbound-offer-before-permission race). Fire-and-
+      // forget — the underlying replaceTrack calls don't need to block the
+      // toggle path.
+      void argsRef.current.onStreamAcquired?.(stream);
       return stream;
     } catch (err) {
       const name = (err as Error).name;

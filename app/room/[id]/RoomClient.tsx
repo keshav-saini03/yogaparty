@@ -145,6 +145,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     onReplaceVideo: peers.replaceVideoTrackEverywhere,
     onClosePeer: peers.closePeer,
     onCloseAll: peers.closeAll,
+    onStreamAcquired: peers.attachLocalStream,
   });
 
   // Keep `getLocalStream` returning the latest stream after `useCall` acquires it.

@@ -38,6 +38,16 @@ export type PeerConnections = {
   closePeer: (peerId: string) => void;
   closeAll: () => void;
   replaceVideoTrackEverywhere: (track: MediaStreamTrack | null) => Promise<void>;
+  /**
+   * Late-attach hook for the race we hit in production: an inbound offer can
+   * arrive (and a PC be built) before this peer's local `getUserMedia`
+   * resolves. The PC's pre-allocated transceivers exist, but their senders
+   * have no track — so nothing flows back to the offerer and they see a
+   * black tile / no peer. Once the stream IS acquired, call this to
+   * `replaceTrack` on every existing PC's senders. No re-negotiation needed
+   * because the m-section direction is already `sendrecv`.
+   */
+  attachLocalStream: (stream: MediaStream) => Promise<void>;
   peerIds: () => string[];
 };
 
@@ -284,6 +294,27 @@ export function usePeerConnections(args: Args): PeerConnections {
     []
   );
 
+  const attachLocalStream = useCallback(async (stream: MediaStream) => {
+    const audio = stream.getAudioTracks()[0] ?? null;
+    const video = stream.getVideoTracks()[0] ?? null;
+    const ops: Promise<void>[] = [];
+    let attached = 0;
+    for (const slot of slotsRef.current.values()) {
+      for (const tx of slot.pc.getTransceivers()) {
+        const kind = tx.receiver.track?.kind ?? tx.sender.track?.kind ?? null;
+        if (kind === 'audio' && audio && tx.sender.track !== audio) {
+          ops.push(tx.sender.replaceTrack(audio));
+          attached++;
+        } else if (kind === 'video' && video && tx.sender.track !== video) {
+          ops.push(tx.sender.replaceTrack(video));
+          attached++;
+        }
+      }
+    }
+    console.log('[rtc] attachLocalStream', { pcs: slotsRef.current.size, attached });
+    await Promise.all(ops);
+  }, []);
+
   const peerIds = useCallback(() => [...slotsRef.current.keys()], []);
 
   // Cleanup on unmount.
@@ -303,6 +334,7 @@ export function usePeerConnections(args: Args): PeerConnections {
       closePeer,
       closeAll,
       replaceVideoTrackEverywhere,
+      attachLocalStream,
       peerIds,
     }),
     [
@@ -313,6 +345,7 @@ export function usePeerConnections(args: Args): PeerConnections {
       closePeer,
       closeAll,
       replaceVideoTrackEverywhere,
+      attachLocalStream,
       peerIds,
     ]
   );
