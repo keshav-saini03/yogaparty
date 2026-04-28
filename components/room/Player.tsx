@@ -211,7 +211,7 @@ export function Player({
       {isHost && hostControl && (
         <div
           data-host-slot="true"
-          className="absolute top-2 right-2 z-[15] pointer-events-auto"
+          className="absolute top-2 right-2 z-[15]"
         >
           {hostControl}
         </div>
