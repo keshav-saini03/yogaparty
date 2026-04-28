@@ -5,7 +5,7 @@ import { CityPreview } from '@/components/landing/CityPreview';
 import { CounterPlaceholder } from '@/components/landing/CounterPlaceholder';
 import { ReferralCapture } from '@/components/landing/ReferralCapture';
 import { SignOutButton } from '@/components/share/SignOutButton';
-import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
 import { getDetectedCity } from '@/lib/geo';
 import { resolveSession } from '@/lib/session';
 
@@ -14,7 +14,11 @@ export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
 async function getStats(city: string | null) {
-  const sb = await createClient();
+  // Service-role client — bypasses RLS so the aggregate counts are real.
+  // The `signups` table has RLS enabled (set in Supabase Studio); the anon
+  // client returns 0 rows. We never expose row data here, only counts and
+  // the top-N city tally, so reading with the elevated key is safe.
+  const sb = createAdminClient();
   const [totalRes, indiaRes, intlRes, cityRes, sample] = await Promise.all([
     sb.from('signups').select('*', { count: 'exact', head: true }),
     sb
