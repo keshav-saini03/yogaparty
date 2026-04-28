@@ -146,4 +146,20 @@ describe('dedupePresence', () => {
   it('returns empty array on empty state', () => {
     expect(dedupePresence({})).toEqual([]);
   });
+
+  it('prefers on_call_intent:true entry over on_call_intent:false for same user', () => {
+    // Reproduces the production bug: Supabase keeps both ch.track payloads
+    // (initial {intent:false} + later {intent:true}) under one connection's
+    // state[user_id] array. Naive "earliest joined_at" picked the false
+    // entry, so peers never saw the toggle. Intent-aware dedup wins.
+    const state = {
+      conn: [
+        { user_id: 'a', name: 'A', city: null, joined_at: 1000, on_call_intent: false },
+        { user_id: 'a', name: 'A', city: null, joined_at: 2000, on_call_intent: true },
+      ],
+    };
+    const result = dedupePresence(state);
+    expect(result).toHaveLength(1);
+    expect(result[0].on_call_intent).toBe(true);
+  });
 });

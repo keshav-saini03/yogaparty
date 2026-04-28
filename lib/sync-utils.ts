@@ -71,7 +71,23 @@ export function dedupePresence(
   for (const arr of Object.values(state)) {
     for (const p of arr) {
       const existing = seen.get(p.user_id);
-      if (!existing || p.joined_at < existing.joined_at) {
+      if (!existing) {
+        seen.set(p.user_id, p);
+        continue;
+      }
+      // Supabase Realtime keeps every `ch.track()` payload as a separate
+      // metadata entry under the connection's presence_ref. After the user
+      // toggles on-call, state[user_id] holds BOTH the initial
+      // {on_call_intent:false} and the later {on_call_intent:true}. Picking
+      // earliest `joined_at` (the previous rule) silently dropped the
+      // toggle. The right collapse is intent-aware: a user is on-call if
+      // ANY entry says so. Among equal-intent entries we keep the earliest
+      // joined_at so host election (which uses joined_at) stays stable.
+      const existingOn = !!existing.on_call_intent;
+      const candidateOn = !!p.on_call_intent;
+      if (candidateOn && !existingOn) {
+        seen.set(p.user_id, p);
+      } else if (candidateOn === existingOn && p.joined_at < existing.joined_at) {
         seen.set(p.user_id, p);
       }
     }
