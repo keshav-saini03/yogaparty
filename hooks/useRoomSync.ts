@@ -28,10 +28,12 @@ export function useRoomSync({ channel, isHost, selfId, selfName }: Args) {
         suppressNextEventRef.current = false;
         return;
       }
+      // sentAt lets viewers add transit time to `timestamp` before seeking,
+      // so they don't permanently land ~½ RTT behind the host.
       channel.send({
         type: 'broadcast',
         event: `sync_${name}`,
-        payload: { timestamp: currentTime },
+        payload: { timestamp: currentTime, sentAt: Date.now() },
       });
     },
     [channel, isHost]

@@ -28,6 +28,41 @@ export function correctedTimestamp(
   return hostTime + lookaheadSec;
 }
 
+/**
+ * Decide how a viewer should close a gap of `drift` seconds.
+ *
+ *   drift = expectedTime - viewerTime
+ *     > 0 → viewer is BEHIND, must speed up (rate > 1) or jump forward
+ *     < 0 → viewer is AHEAD, must slow down (rate < 1) or jump back
+ *
+ * Tiers (chosen to keep YouTube's seek-stutter off-screen for typical drift):
+ *   |drift| <  smallMs  → ignore (within tolerance)
+ *   |drift| <  largeMs  → smooth: bend playbackRate by ±0.25 for a window
+ *   |drift| >= largeMs  → hard: seekTo(expectedTime)
+ */
+export type Correction =
+  | { kind: 'none' }
+  | { kind: 'rate'; rate: number; durationMs: number }
+  | { kind: 'seek' };
+
+export function pickCorrection(
+  drift: number,
+  smallSec = 0.5,
+  largeSec = 1.5
+): Correction {
+  const abs = Math.abs(drift);
+  if (abs < smallSec) return { kind: 'none' };
+  if (abs < largeSec) {
+    // Use ±0.25 step from neutral 1.0 — these are guaranteed-supported
+    // YouTube rates. Nudge duration is sized so the offset closes in ~that
+    // many seconds: closing X seconds at delta-rate 0.25 takes X/0.25 sec.
+    const rate = drift > 0 ? 1.25 : 0.75;
+    const durationMs = Math.min(8000, Math.max(800, (abs / 0.25) * 1000));
+    return { kind: 'rate', rate, durationMs };
+  }
+  return { kind: 'seek' };
+}
+
 export function dedupePresence(
   state: Record<string, Participant[]>
 ): Participant[] {

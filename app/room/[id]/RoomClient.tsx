@@ -19,6 +19,7 @@ import { postSignupCopy } from '@/lib/whatsapp';
 import {
   correctedTimestamp,
   dedupePresence,
+  pickCorrection,
   shouldCorrect,
   type Participant,
 } from '@/lib/sync-utils';
@@ -30,7 +31,14 @@ type Props = {
   self: { user_id: string; name: string; city: string | null };
 };
 
-const HEARTBEAT_INTERVAL_MS = 5_000;
+// Heartbeat cadence — viewers report currentTime, host evaluates drift.
+// 2s strikes a balance between bandwidth and how long sub-threshold drift
+// can hide before being corrected.
+const HEARTBEAT_INTERVAL_MS = 2_000;
+// Drift over this many seconds triggers a correction. Tighter than the
+// historical 2s default — combined with rate-based smoothing below, the
+// correction itself is mostly imperceptible.
+const DRIFT_THRESHOLD_SEC = 0.5;
 
 export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   const [channel, setChannel] = useState<RealtimeChannel | null>(null);
@@ -46,6 +54,9 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   const playerRef = useRef<PlayerHandle | null>(null);
   const suppressNextOutboundRef = useRef(false);
   const cooldownUntilRef = useRef(0);
+  // Tracks the in-flight rate-nudge so we can revert to 1.0× when it ends.
+  // null = no nudge active.
+  const rateRevertTimerRef = useRef<number | null>(null);
   // Host's last broadcast play/pause intent (1=playing, 2=paused). Used by
   // viewer's <Player /> to force-correct any local divergence (e.g. user
   // clicked the iframe through DevTools / keyboard).
@@ -108,38 +119,77 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     });
 
     // ── Sync events ──────────────────────────────────────────────
+    // Compensate transit time: the host snapshotted `timestamp` at `sentAt`,
+    // so on receipt the equivalent host position is `timestamp + (now -
+    // sentAt) / 1000`. This collapses the steady-state lag from ~½ RTT to
+    // the tens of milliseconds it takes us to issue a seek/play call.
+    const expectedFromPayload = (p: { timestamp: number; sentAt?: number }) => {
+      const transitSec = p.sentAt
+        ? Math.max(0, (Date.now() - p.sentAt) / 1000)
+        : 0;
+      return p.timestamp + transitSec;
+    };
+
     ch.on('broadcast', { event: 'sync_play' }, ({ payload }) => {
-      const p = payload as { timestamp: number };
+      const p = payload as { timestamp: number; sentAt?: number };
       setEnforceState(1); // YT_PLAYING — viewers will be forced back if they pause
       if (!playerRef.current) return;
       suppressNextOutboundRef.current = true;
-      playerRef.current.seekTo(p.timestamp, true);
+      playerRef.current.seekTo(expectedFromPayload(p), true);
       playerRef.current.play();
     });
 
     ch.on('broadcast', { event: 'sync_pause' }, ({ payload }) => {
-      const p = payload as { timestamp: number };
+      const p = payload as { timestamp: number; sentAt?: number };
       setEnforceState(2); // YT_PAUSED — viewers will be forced back if they play
       if (!playerRef.current) return;
       suppressNextOutboundRef.current = true;
       playerRef.current.pause();
+      // For pause we use the raw timestamp — adding transit time would put
+      // the viewer slightly past where the host actually stopped.
       playerRef.current.seekTo(p.timestamp, true);
     });
 
     ch.on('broadcast', { event: 'sync_seek' }, ({ payload }) => {
-      const p = payload as { timestamp: number };
+      const p = payload as { timestamp: number; sentAt?: number };
       if (!playerRef.current) return;
       suppressNextOutboundRef.current = true;
-      playerRef.current.seekTo(p.timestamp, true);
+      playerRef.current.seekTo(expectedFromPayload(p), true);
     });
 
     ch.on('broadcast', { event: 'sync_correct' }, ({ payload }) => {
-      const p = payload as { target_user_id: string; timestamp: number };
+      const p = payload as {
+        target_user_id: string;
+        timestamp: number;
+        sentAt?: number;
+      };
       if (p.target_user_id !== selfIdRef.current) return;
       if (!playerRef.current) return;
-      suppressNextOutboundRef.current = true;
-      playerRef.current.seekTo(p.timestamp, true);
-      cooldownUntilRef.current = Date.now() + 1000;
+
+      const expected = expectedFromPayload(p);
+      const drift = expected - playerRef.current.getCurrentTime();
+      const correction = pickCorrection(drift);
+
+      if (correction.kind === 'none') return;
+
+      cooldownUntilRef.current = Date.now() + 1500;
+
+      if (correction.kind === 'seek') {
+        suppressNextOutboundRef.current = true;
+        playerRef.current.seekTo(expected, true);
+        return;
+      }
+
+      // Smooth correction: bend playback rate for `durationMs`, then revert.
+      // We never compound nudges — clear any in-flight timer first.
+      if (rateRevertTimerRef.current !== null) {
+        window.clearTimeout(rateRevertTimerRef.current);
+      }
+      playerRef.current.setPlaybackRate(correction.rate);
+      rateRevertTimerRef.current = window.setTimeout(() => {
+        playerRef.current?.setPlaybackRate(1);
+        rateRevertTimerRef.current = null;
+      }, correction.durationMs);
     });
 
     ch.on('broadcast', { event: 'heartbeat' }, ({ payload }) => {
@@ -152,14 +202,27 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       if (!isHostRef.current) return;
       if (!playerRef.current) return;
       if (p.user_id === selfIdRef.current) return;
+
+      // Project the viewer's reported time forward by transit so we compare
+      // apples to apples (the report was snapshotted ~½ RTT ago).
+      const transitSec = p.sentAt
+        ? Math.max(0, (Date.now() - p.sentAt) / 1000)
+        : 0;
+      const viewerTime = p.currentTime + transitSec;
       const hostTime = playerRef.current.getCurrentTime();
-      if (shouldCorrect(hostTime, p.currentTime)) {
+
+      if (shouldCorrect(hostTime, viewerTime, DRIFT_THRESHOLD_SEC)) {
         ch.send({
           type: 'broadcast',
           event: 'sync_correct',
           payload: {
             target_user_id: p.user_id,
+            // Add the standard lookahead so viewer's seek lands on the host
+            // by the time the packet arrives. For rate-nudges, the viewer
+            // recomputes drift on receipt — the lookahead just tightens the
+            // seek case.
             timestamp: correctedTimestamp(hostTime),
+            sentAt: Date.now(),
           },
         });
       }
@@ -189,6 +252,16 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       // bumped activity recently (>90s). No-op for auto-city rooms (which
       // have title IS NULL). Fire-and-forget; ignore failures.
       closeRoomIfStale(roomId).catch(() => {});
+      // Cancel any pending rate-revert and put playback back to normal.
+      if (rateRevertTimerRef.current !== null) {
+        window.clearTimeout(rateRevertTimerRef.current);
+        rateRevertTimerRef.current = null;
+      }
+      try {
+        playerRef.current?.setPlaybackRate(1);
+      } catch {
+        /* player may already be torn down */
+      }
     };
   }, [roomId, self.user_id, self.name, self.city]);
 
@@ -203,10 +276,11 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     return () => window.clearInterval(id);
   }, [roomId, isReady]);
 
-  // Heartbeat ticker — every client sends `heartbeat` every 5s. The host
-  // listens (registered above) and emits sync_correct on drift > 2s. The
-  // ticker respects cooldownUntilRef which is bumped whenever this client
-  // applies a sync_correct, preventing tight loops.
+  // Heartbeat ticker — every client sends `heartbeat` at HEARTBEAT_INTERVAL_MS
+  // (currently 2s). The host (registered above) projects each viewer's
+  // currentTime forward by transit time and emits sync_correct on drift past
+  // DRIFT_THRESHOLD_SEC (currently 0.5s). cooldownUntilRef is bumped whenever
+  // this client applies a correction so we don't tight-loop on a slow seek.
   useEffect(() => {
     if (!channel || !isReady) return;
     const tick = () => {
