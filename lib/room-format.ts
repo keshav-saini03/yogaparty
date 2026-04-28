@@ -1,4 +1,4 @@
-type EyebrowInput = {
+export type EyebrowInput = {
   listening: number;
   onCall: number;
   speakerName: string | null;
