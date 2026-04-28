@@ -22,6 +22,8 @@ export function useAudioDuck(args: Args) {
   const speakingRef = useRef<Map<string, boolean>>(new Map());
   const [anyPeerSpeaking, setAnyPeerSpeaking] = useState(false);
   const anyPeerSpeakingRef = useRef(false);
+  const [speakingPeerIds, setSpeakingPeerIds] = useState<string[]>([]);
+  const speakingPeerIdsRef = useRef<string[]>([]);
 
   // Ramp state.
   const [duckedVolume, setDuckedVolume] = useState(args.userVolume);
@@ -102,6 +104,18 @@ export function useAudioDuck(args: Args) {
         speakingRef.current.set(peerId, isSpeaking);
         if (isSpeaking) speaking = true;
       }
+      // Snapshot the current set of speaking peer ids in stable order. Only
+      // fire setState when the set itself changes (not on every 33 ms tick).
+      const next: string[] = [];
+      for (const [peerId, sp] of speakingRef.current.entries()) {
+        if (sp) next.push(peerId);
+      }
+      next.sort();
+      const prev = speakingPeerIdsRef.current;
+      if (next.length !== prev.length || next.some((id, i) => id !== prev[i])) {
+        speakingPeerIdsRef.current = next;
+        setSpeakingPeerIds(next);
+      }
       // Read from ref so synchronous timer advances see the latest value
       // without waiting for React to flush state.
       const wasAny = anyPeerSpeakingRef.current;
@@ -150,6 +164,12 @@ export function useAudioDuck(args: Args) {
     }
     slotsRef.current.delete(peerId);
     speakingRef.current.delete(peerId);
+    const prev = speakingPeerIdsRef.current;
+    if (prev.includes(peerId)) {
+      const next = prev.filter((id) => id !== peerId);
+      speakingPeerIdsRef.current = next;
+      setSpeakingPeerIds(next);
+    }
   }, []);
 
   // Cleanup.
@@ -165,6 +185,7 @@ export function useAudioDuck(args: Args) {
   return {
     duckedVolume,
     anyPeerSpeaking,
+    speakingPeerIds,
     isSpeaking: (peerId: string) => speakingRef.current.get(peerId) ?? false,
     attachPeer,
     detachPeer,

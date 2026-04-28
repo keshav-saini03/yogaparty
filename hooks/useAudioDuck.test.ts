@@ -111,3 +111,15 @@ describe('useAudioDuck — anti-fight', () => {
     expect(result.current.duckedVolume).toBe(100);
   });
 });
+
+describe('useAudioDuck speakingPeerIds', () => {
+  it('starts empty', () => {
+    const { result } = renderHook(() => useAudioDuck({ userVolume: 80 }));
+    expect(result.current.speakingPeerIds).toEqual([]);
+  });
+
+  // Note: a full RMS-driven test would need to mock AudioContext/AnalyserNode,
+  // which is heavyweight for Vitest. We rely on the empty/initial state assertion
+  // and existing speakingRef-based tests; integration coverage comes from the
+  // PresenceList speaker-glow component test in Task 6.
+});
