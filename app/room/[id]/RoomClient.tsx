@@ -149,7 +149,17 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     onReplaceVideo: peers.replaceVideoTrackEverywhere,
     onClosePeer: peers.closePeer,
     onCloseAll: peers.closeAll,
-    onStreamAcquired: peers.attachLocalStream,
+    onStreamAcquired: (stream) => {
+      // SYNC update of callStreamRef — closes the race where a remote
+      // offer arrives between getUserMedia resolving and the useEffect-
+      // based callStreamRef bridge firing. Without this, buildPc would
+      // read getLocalStream() === null and answer with empty senders, so
+      // the offerer never gets ontrack from this peer (one-way media).
+      callStreamRef.current = stream;
+      // Also late-attach to any PCs that were built before the stream was
+      // acquired (the original inbound-offer-before-permission race).
+      void peers.attachLocalStream(stream);
+    },
     onCallIntentChange: (intent) => {
       callIntentRef.current = intent;
     },
