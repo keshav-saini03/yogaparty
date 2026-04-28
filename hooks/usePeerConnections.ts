@@ -39,13 +39,11 @@ export type PeerConnections = {
   closeAll: () => void;
   replaceVideoTrackEverywhere: (track: MediaStreamTrack | null) => Promise<void>;
   /**
-   * Late-attach hook for the race we hit in production: an inbound offer can
-   * arrive (and a PC be built) before this peer's local `getUserMedia`
-   * resolves. The PC's pre-allocated transceivers exist, but their senders
-   * have no track — so nothing flows back to the offerer and they see a
-   * black tile / no peer. Once the stream IS acquired, call this to
-   * `replaceTrack` on every existing PC's senders. No re-negotiation needed
-   * because the m-section direction is already `sendrecv`.
+   * Late-attach hook for the inbound-offer-before-permission race: if a peer
+   * sends us an offer before our `getUserMedia` has resolved, the PC was
+   * built with no local tracks, so the answer is recvonly and the offerer
+   * sees a black tile. Call this when the stream finally resolves to push
+   * tracks onto every existing PC's senders via `replaceTrack`.
    */
   attachLocalStream: (stream: MediaStream) => Promise<void>;
   peerIds: () => string[];
@@ -54,17 +52,25 @@ export type PeerConnections = {
 /**
  * Owns the lifecycle of one `RTCPeerConnection` per remote peer in the room.
  *
- * This hook is purely imperative — it exposes methods that the higher-level
- * call state machine (`useCall`, later wave) drives in response to signaling
- * events on the room's Supabase Realtime channel. It does NOT decide when to
- * call whom; it just makes the calls happen and forwards offer/answer/ICE to
- * the channel.
+ * Mechanics mirror the proven watch-mate pattern: `new RTCPeerConnection` →
+ * `addTrack` per local track → done. We do NOT pre-allocate transceivers,
+ * because the offerer/answerer interaction with pre-allocated transceivers +
+ * `addTrack` + `setRemoteDescription(offer)` was producing one-way media
+ * (offerer sees ICE connected but never gets `ontrack`). The simpler path
+ * matches what browsers test the most heavily.
  *
  * Recovery policy (spec §8.2): on `iceConnectionState === 'failed'`, attempt
  * exactly one ICE restart. A second failure closes the PC and drops the slot.
  */
 export function usePeerConnections(args: Args): PeerConnections {
   const slotsRef = useRef<Map<string, Slot>>(new Map());
+  /**
+   * Per-peer queue of ICE candidates that arrived before we had a slot for
+   * them OR before `setRemoteDescription` had been applied. Drained inside
+   * `handleOffer` / `handleAnswer` after the remote description is set.
+   * Mirrors watch-mate's `iceCandidateQueues`.
+   */
+  const iceQueueRef = useRef<Map<string, RTCIceCandidateInit[]>>(new Map());
 
   const send = useCallback(
     (event: string, payload: unknown) => {
@@ -73,10 +79,39 @@ export function usePeerConnections(args: Args): PeerConnections {
     [args.channel]
   );
 
+  const getQueue = useCallback((peerId: string): RTCIceCandidateInit[] => {
+    let q = iceQueueRef.current.get(peerId);
+    if (!q) {
+      q = [];
+      iceQueueRef.current.set(peerId, q);
+    }
+    return q;
+  }, []);
+
+  const drainIceQueue = useCallback(async (peerId: string) => {
+    const slot = slotsRef.current.get(peerId);
+    const queue = iceQueueRef.current.get(peerId);
+    if (!slot || !queue || queue.length === 0) return;
+    const drained = queue.splice(0, queue.length);
+    for (const c of drained) {
+      try {
+        await slot.pc.addIceCandidate(c);
+      } catch (err) {
+        console.warn('[rtc] drainIceQueue: addIceCandidate failed', {
+          peer: peerId,
+          err: (err as Error).message,
+        });
+      }
+    }
+  }, []);
+
   const closeSlot = useCallback(
     (peerId: string) => {
       const slot = slotsRef.current.get(peerId);
-      if (!slot) return;
+      if (!slot) {
+        iceQueueRef.current.delete(peerId);
+        return;
+      }
       if (slot.graceTimer !== null) window.clearTimeout(slot.graceTimer);
       slot.pc.getSenders().forEach((s) => {
         try {
@@ -91,6 +126,7 @@ export function usePeerConnections(args: Args): PeerConnections {
         /* already closed */
       }
       slotsRef.current.delete(peerId);
+      iceQueueRef.current.delete(peerId);
       args.onPeerDropped?.(peerId);
     },
     // Intentionally narrow: stabilizing callback identity is the whole point.
@@ -102,14 +138,17 @@ export function usePeerConnections(args: Args): PeerConnections {
     (peerId: string): Slot => {
       const pc = new RTCPeerConnection(PC_CONFIG);
 
-      // Create both transceivers up-front so toggle-on later doesn't need
-      // a renegotiation (spec §8.1).
-      pc.addTransceiver('audio', { direction: 'sendrecv' });
-      pc.addTransceiver('video', { direction: 'sendrecv' });
-
       const local = args.getLocalStream();
       const trackCount = local?.getTracks().length ?? 0;
-      console.log('[rtc] buildPc', { self: args.selfId, peer: peerId, hasLocal: !!local, trackCount });
+      console.log('[rtc] buildPc', {
+        self: args.selfId,
+        peer: peerId,
+        hasLocal: !!local,
+        trackCount,
+      });
+      // Watch-mate pattern: just addTrack. The transceivers are auto-created
+      // with our local tracks attached, and `setRemoteDescription` matches
+      // them by m-line index cleanly.
       if (local) {
         for (const track of local.getTracks()) pc.addTrack(track, local);
       }
@@ -125,7 +164,12 @@ export function usePeerConnections(args: Args): PeerConnections {
       };
 
       pc.ontrack = (e) => {
-        console.log('[rtc] ontrack', { self: args.selfId, peer: peerId, kind: e.track.kind, hasStream: !!e.streams[0] });
+        console.log('[rtc] ontrack', {
+          self: args.selfId,
+          peer: peerId,
+          kind: e.track.kind,
+          hasStream: !!e.streams[0],
+        });
         if (e.streams[0]) args.onRemoteStream?.(peerId, e.streams[0]);
       };
 
@@ -232,6 +276,8 @@ export function usePeerConnections(args: Args): PeerConnections {
       console.log('[rtc] handleOffer ←', { self: args.selfId, from: p.from });
       const { pc } = ensureSlot(p.from);
       await pc.setRemoteDescription({ type: 'offer', sdp: p.sdp });
+      // Drain any ICE candidates that arrived before the offer reached us.
+      await drainIceQueue(p.from);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
       send(WEBRTC_EVENTS.ANSWER, {
@@ -241,23 +287,33 @@ export function usePeerConnections(args: Args): PeerConnections {
         sentAt: Date.now(),
       });
     },
-    [ensureSlot, send, args.selfId]
+    [ensureSlot, send, args.selfId, drainIceQueue]
   );
 
-  const handleAnswer = useCallback(async (p: WebRtcAnswerPayload) => {
-    console.log('[rtc] handleAnswer ←', { from: p.from });
-    const slot = slotsRef.current.get(p.from);
-    if (!slot) {
-      console.warn('[rtc] handleAnswer: no slot for', p.from);
-      return;
-    }
-    await slot.pc.setRemoteDescription({ type: 'answer', sdp: p.sdp });
-  }, []);
+  const handleAnswer = useCallback(
+    async (p: WebRtcAnswerPayload) => {
+      console.log('[rtc] handleAnswer ←', { from: p.from });
+      const slot = slotsRef.current.get(p.from);
+      if (!slot) {
+        console.warn('[rtc] handleAnswer: no slot for', p.from);
+        return;
+      }
+      await slot.pc.setRemoteDescription({ type: 'answer', sdp: p.sdp });
+      // Drain any ICE candidates that arrived before the answer.
+      await drainIceQueue(p.from);
+    },
+    [drainIceQueue]
+  );
 
   const handleIce = useCallback(async (p: WebRtcIcePayload) => {
     const slot = slotsRef.current.get(p.from);
-    if (!slot) {
-      console.warn('[rtc] handleIce: no slot for', p.from);
+    // No slot yet OR remote description not set → queue and drain later.
+    // This mirrors watch-mate's `iceCandidateQueues` and prevents the silent-
+    // drop bug where ICE candidates from an inbound offer arrive before the
+    // offer itself does (rare but possible across realtime broadcasts).
+    if (!slot || !slot.pc.remoteDescription) {
+      const q = getQueue(p.from);
+      q.push(p.candidate);
       return;
     }
     try {
@@ -269,7 +325,7 @@ export function usePeerConnections(args: Args): PeerConnections {
         err: (err as Error).message,
       });
     }
-  }, []);
+  }, [getQueue]);
 
   const closePeer = useCallback(
     (peerId: string) => {
@@ -280,6 +336,7 @@ export function usePeerConnections(args: Args): PeerConnections {
 
   const closeAll = useCallback(() => {
     for (const peerId of [...slotsRef.current.keys()]) closeSlot(peerId);
+    iceQueueRef.current.clear();
   }, [closeSlot]);
 
   const replaceVideoTrackEverywhere = useCallback(
@@ -299,17 +356,36 @@ export function usePeerConnections(args: Args): PeerConnections {
     const video = stream.getVideoTracks()[0] ?? null;
     const ops: Promise<void>[] = [];
     let attached = 0;
+    let missingSender = 0;
     for (const slot of slotsRef.current.values()) {
-      for (const tx of slot.pc.getTransceivers()) {
-        const kind = tx.receiver.track?.kind ?? tx.sender.track?.kind ?? null;
-        if (kind === 'audio' && audio && tx.sender.track !== audio) {
-          ops.push(tx.sender.replaceTrack(audio));
-          attached++;
-        } else if (kind === 'video' && video && tx.sender.track !== video) {
-          ops.push(tx.sender.replaceTrack(video));
-          attached++;
-        }
+      const senders = slot.pc.getSenders();
+      const audioSender = senders.find((s) => s.track?.kind === 'audio') ??
+        senders.find((s) => !s.track); // null-track sender (auto-created from setRemoteDescription)
+      const videoSender = senders.find((s) => s.track?.kind === 'video') ??
+        senders.find((s) => !s.track && s !== audioSender);
+      if (audio && audioSender && audioSender.track !== audio) {
+        ops.push(audioSender.replaceTrack(audio));
+        attached++;
+      } else if (audio && !audioSender) {
+        // No matching sender: buildPc was called without a stream, so no
+        // m-line for audio exists yet. Adding now would require a re-offer
+        // we don't currently emit; the caller (RoomClient) acquires the
+        // stream synchronously before flipping `on_call_intent`, so this
+        // path should not fire in practice.
+        missingSender++;
       }
+      if (video && videoSender && videoSender.track !== video) {
+        ops.push(videoSender.replaceTrack(video));
+        attached++;
+      } else if (video && !videoSender) {
+        missingSender++;
+      }
+    }
+    if (missingSender > 0) {
+      console.warn('[rtc] attachLocalStream: senders missing', {
+        pcs: slotsRef.current.size,
+        missingSender,
+      });
     }
     console.log('[rtc] attachLocalStream', { pcs: slotsRef.current.size, attached });
     await Promise.all(ops);

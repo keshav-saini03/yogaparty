@@ -184,7 +184,7 @@ describe('usePeerConnections — ICE', () => {
     );
   });
 
-  it('handleIce applies inbound candidates to the matching PC', async () => {
+  it('handleIce applies inbound candidates immediately once remoteDescription is set', async () => {
     const channel = makeChannel();
     const { result } = renderHook(() =>
       usePeerConnections({
@@ -197,23 +197,33 @@ describe('usePeerConnections — ICE', () => {
     await act(async () => {
       await result.current.createOfferTo('peer-1');
     });
+    const pc = MockRTCPeerConnection.instances[0];
+    // Simulate the answer arriving — sets remoteDescription on the mock.
+    await act(async () => {
+      await result.current.handleAnswer({
+        from: 'peer-1',
+        to: 'self',
+        sdp: 'their-answer',
+        sentAt: 1,
+      });
+    });
+    pc.addIceCandidate.mockClear();
 
     await act(async () => {
       await result.current.handleIce({
         from: 'peer-1',
         to: 'self',
         candidate: { candidate: 'inbound', sdpMid: '0', sdpMLineIndex: 0 },
-        sentAt: 1,
+        sentAt: 2,
       });
     });
 
-    const pc = MockRTCPeerConnection.instances[0];
     expect(pc.addIceCandidate).toHaveBeenCalledWith(
       expect.objectContaining({ candidate: 'inbound' })
     );
   });
 
-  it('handleIce silently drops candidates for unknown peers', async () => {
+  it('queues candidates that arrive before a slot exists, then drains on offer', async () => {
     const channel = makeChannel();
     const { result } = renderHook(() =>
       usePeerConnections({
@@ -223,14 +233,71 @@ describe('usePeerConnections — ICE', () => {
       })
     );
 
-    await expect(
-      result.current.handleIce({
-        from: 'unknown',
+    // Candidate arrives BEFORE the offer — must be queued, not dropped.
+    await act(async () => {
+      await result.current.handleIce({
+        from: 'peer-1',
         to: 'self',
-        candidate: { candidate: 'x' },
+        candidate: { candidate: 'early-cand', sdpMid: '0', sdpMLineIndex: 0 },
         sentAt: 1,
+      });
+    });
+
+    // Now the offer arrives. handleOffer must drain the queue post-setRemoteDescription.
+    await act(async () => {
+      await result.current.handleOffer({
+        from: 'peer-1',
+        to: 'self',
+        sdp: 'their-offer',
+        sentAt: 2,
+      });
+    });
+
+    const pc = MockRTCPeerConnection.instances[0];
+    expect(pc.addIceCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({ candidate: 'early-cand' })
+    );
+  });
+
+  it('queues candidates that arrive before remote description, drains on answer', async () => {
+    const channel = makeChannel();
+    const { result } = renderHook(() =>
+      usePeerConnections({
+        selfId: 'self',
+        channel: channel as never,
+        getLocalStream: () => null,
       })
-    ).resolves.toBeUndefined();
+    );
+
+    // We sent an offer (slot exists) but the answer hasn't arrived yet.
+    await act(async () => {
+      await result.current.createOfferTo('peer-1');
+    });
+    const pc = MockRTCPeerConnection.instances[0];
+    // Ensure remoteDescription is null so the new branch queues this candidate.
+    pc.remoteDescription = null;
+
+    await act(async () => {
+      await result.current.handleIce({
+        from: 'peer-1',
+        to: 'self',
+        candidate: { candidate: 'pre-answer', sdpMid: '0', sdpMLineIndex: 0 },
+        sentAt: 1,
+      });
+    });
+    expect(pc.addIceCandidate).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await result.current.handleAnswer({
+        from: 'peer-1',
+        to: 'self',
+        sdp: 'their-answer',
+        sentAt: 2,
+      });
+    });
+    expect(pc.addIceCandidate).toHaveBeenCalledWith(
+      expect.objectContaining({ candidate: 'pre-answer' })
+    );
   });
 });
 
