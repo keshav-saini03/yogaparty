@@ -203,4 +203,43 @@ describe('useCall — reconciliation tick', () => {
 
     vi.useRealTimers();
   });
+
+  it('reconciliation interval survives parent re-renders (does not reset)', async () => {
+    vi.useFakeTimers();
+
+    const channel = makeChannel();
+    const onCreateOfferTo = vi.fn(async () => {});
+    const peers = ['zzzz-peer'];
+
+    const { result, rerender } = renderHook(
+      ({ name }: { name: string }) =>
+        useCall({
+          selfId: 'self',
+          selfName: name,
+          channel: channel as never,
+          peersOnCall: () => peers,
+          onCreateOfferTo,
+        }),
+      { initialProps: { name: 'Alice' } }
+    );
+
+    await act(async () => {
+      await result.current.toggleMic();
+    });
+
+    onCreateOfferTo.mockClear();
+
+    // Simulate a parent re-render with a new args object on every tick.
+    for (let i = 0; i < 5; i++) {
+      rerender({ name: `Alice-${i}` });
+      await act(async () => {
+        vi.advanceTimersByTime(2_000);
+      });
+    }
+    // Total elapsed: 10s — ONE reconciliation tick should have fired.
+    expect(onCreateOfferTo).toHaveBeenCalledTimes(1);
+    expect(onCreateOfferTo).toHaveBeenCalledWith('zzzz-peer');
+
+    vi.useRealTimers();
+  });
 });

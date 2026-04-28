@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { MEDIA_CONSTRAINTS, MESH_RECONCILE_INTERVAL_MS } from '@/lib/webrtc-config';
 import { WEBRTC_EVENTS } from '@/lib/webrtc-events';
-import { diffMesh, pickInitiator } from '@/lib/webrtc-utils';
+import { pickInitiator } from '@/lib/webrtc-utils';
 
 export type CallState =
   | 'idle'
@@ -54,24 +54,30 @@ export function useCall(args: Args) {
 
   const streamRef = useRef<MediaStream | null>(null);
 
-  const updatePresence = useCallback(
-    async (onCallIntent: boolean) => {
-      if (!args.channel) return;
-      const payload: Partial<CallPresenceExtras> = {
-        user_id: args.selfId,
-        name: args.selfName ?? '',
-        city: args.selfCity ?? null,
-        joined_at: args.selfJoinedAt ?? Date.now(),
-        on_call_intent: onCallIntent,
-      };
-      try {
-        await args.channel.track(payload as never);
-      } catch {
-        /* presence may not be subscribed yet; ignore */
-      }
-    },
-    [args.channel, args.selfId, args.selfName, args.selfCity, args.selfJoinedAt]
-  );
+  // Stash the latest args in a ref so callbacks/effects can read fresh values
+  // without depending on the (always-new-identity) args object. Without this
+  // the reconciliation effect tears down its interval on every parent render.
+  const argsRef = useRef(args);
+  useEffect(() => {
+    argsRef.current = args;
+  });
+
+  const updatePresence = useCallback(async (onCallIntent: boolean) => {
+    const a = argsRef.current;
+    if (!a.channel) return;
+    const payload: Partial<CallPresenceExtras> = {
+      user_id: a.selfId,
+      name: a.selfName ?? '',
+      city: a.selfCity ?? null,
+      joined_at: a.selfJoinedAt ?? Date.now(),
+      on_call_intent: onCallIntent,
+    };
+    try {
+      await a.channel.track(payload as never);
+    } catch {
+      /* presence may not be subscribed yet; ignore */
+    }
+  }, []);
 
   const acquireStream = useCallback(async (): Promise<MediaStream | null> => {
     if (streamRef.current) return streamRef.current;
@@ -97,17 +103,25 @@ export function useCall(args: Args) {
   }, []);
 
   const enterMesh = useCallback(async () => {
+    // Closure-stale state read: callers (toggleMic/toggleCam) capture state from
+    // render time; on first call state is 'idle' (or 'requesting-permission'
+    // mid-acquireStream), so the negative check correctly admits us to mesh
+    // entry. Don't refactor to `state === 'idle'` — that would block entry from
+    // mid-permission-flight.
     if (state !== 'on-call') {
       setState('on-call');
       await updatePresence(true);
+      const a = argsRef.current;
       // Initiate offers to anyone we should reach (deterministic rule).
-      for (const peerId of args.peersOnCall()) {
-        if (pickInitiator(args.selfId, peerId)) {
-          await args.onCreateOfferTo?.(peerId);
+      for (const peerId of a.peersOnCall()) {
+        if (pickInitiator(a.selfId, peerId)) {
+          await a.onCreateOfferTo?.(peerId);
         }
       }
     }
-  }, [state, updatePresence, args]);
+    // Intentionally narrow — argsRef holds latest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, updatePresence]);
 
   const toggleMic = useCallback(async () => {
     if (state === 'leaving') return;
@@ -121,6 +135,8 @@ export function useCall(args: Args) {
     track.enabled = willEnable;
     setMic(willEnable);
     await enterMesh();
+    // Intentionally narrow — argsRef holds latest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state, acquireStream, enterMesh, micEnabled]);
 
   const toggleCam = useCallback(async () => {
@@ -134,48 +150,61 @@ export function useCall(args: Args) {
     const willEnable = !camEnabled;
     track.enabled = willEnable;
     setCam(willEnable);
-    await args.onReplaceVideo?.(willEnable ? track : null);
+    await argsRef.current.onReplaceVideo?.(willEnable ? track : null);
     await enterMesh();
-  }, [state, acquireStream, enterMesh, args, camEnabled]);
+    // Intentionally narrow — argsRef holds latest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, acquireStream, enterMesh, camEnabled]);
 
   const leave = useCallback(async () => {
     if (state === 'idle' || state === 'leaving') return;
     setState('leaving');
-    args.channel?.send({
+    const a = argsRef.current;
+    // 1. Broadcast call_end (fire-and-forget — peers update tiles fast).
+    a.channel?.send({
       type: 'broadcast',
       event: WEBRTC_EVENTS.CALL_END,
-      payload: { from: args.selfId, sentAt: Date.now() },
+      payload: { from: a.selfId, sentAt: Date.now() },
     });
-    args.onCloseAll?.();
+    // 2. Flip presence intent BEFORE tearing down PCs so peers don't see a
+    //    brief on_call_intent=true window during teardown (spec §8.3).
+    await updatePresence(false);
+    // 3. Now tear down peer connections.
+    a.onCloseAll?.();
+    // 4. Stop local tracks and release the stream.
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
+    // 5. Reset toggles and return to idle.
     setMic(false);
     setCam(false);
-    await updatePresence(false);
     setState('idle');
-  }, [state, args, updatePresence]);
+    // Intentionally narrow — argsRef holds latest
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state, updatePresence]);
 
   // Mesh reconciliation tick — catches missed call_ends and self-heals.
+  // Depends only on `state`; reads fresh args from argsRef so the interval
+  // survives parent re-renders (the bug we're fixing).
   useEffect(() => {
     if (state !== 'on-call') return;
     const id = window.setInterval(() => {
-      const expected = args.peersOnCall();
+      const a = argsRef.current;
+      const expected = a.peersOnCall();
       // We don't have the actual PC set here; the orchestrator passes it in
       // via onCreateOfferTo decisions. As a simplification we just (re-)offer
       // to any expected peer for whom we should be initiator. The PC hook
       // dedupes (returns existing slot) so this is idempotent.
       for (const peerId of expected) {
-        if (pickInitiator(args.selfId, peerId)) {
-          args.onCreateOfferTo?.(peerId);
+        if (pickInitiator(a.selfId, peerId)) {
+          a.onCreateOfferTo?.(peerId);
         }
       }
       // Closures: anyone we have a PC with but who is no longer in expected
       // is detected by the orchestrator's webrtc_call_end / iceconnection
       // ladder; useCall doesn't own that bookkeeping.
-      void diffMesh; // imported for future use; silence unused
     }, MESH_RECONCILE_INTERVAL_MS);
     return () => window.clearInterval(id);
-  }, [state, args]);
+  }, [state]);
 
   // Cleanup on unmount.
   useEffect(() => {
