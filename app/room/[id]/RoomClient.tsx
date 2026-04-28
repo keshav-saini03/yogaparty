@@ -14,7 +14,6 @@ import type { ChatMsg } from '@/lib/room-types';
 import { CURATED_VIDEOS } from '@/lib/videos';
 import { pickVideo } from '@/app/actions/pick-video';
 import { bumpRoomActivity, closeRoomIfStale } from '@/app/actions/room-activity';
-import { WhatsAppShareButton } from '@/components/share/WhatsAppShareButton';
 import { postSignupCopy } from '@/lib/whatsapp';
 import {
   correctedTimestamp,
@@ -29,6 +28,7 @@ import { useAudioDuck } from '@/hooks/useAudioDuck';
 import { usePeerConnections } from '@/hooks/usePeerConnections';
 import { CallDock, type TileVm } from '@/components/room/CallDock';
 import { StartTalkingButton } from '@/components/room/StartTalkingButton';
+import { WelcomeShareToast } from '@/components/room/WelcomeShareToast';
 import {
   isOfferPayload,
   isAnswerPayload,
@@ -698,35 +698,6 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
         <main className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 flex flex-col gap-4 p-4 sm:p-6">
-            {welcomeOpen && (
-              <div className="rise relative border border-[#19d27a] bg-[rgba(25,210,122,0.08)] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
-                <div className="min-w-0 flex-1">
-                  <p className="font-mono text-[0.62rem] tracking-[0.22em] uppercase text-[#19d27a]">
-                    You&apos;re tuned in
-                  </p>
-                  <p className="mt-1.5 font-display text-base sm:text-lg leading-snug text-[color:var(--ink)]">
-                    Drop the link in your group — it&apos;s better with people.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <WhatsAppShareButton
-                    text={welcomeShareText}
-                    label="Share now"
-                    variant="pill"
-                    onShare={dismissWelcome}
-                  />
-                  <button
-                    type="button"
-                    onClick={dismissWelcome}
-                    aria-label="Dismiss share prompt"
-                    className="font-mono text-[0.62rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)] hover:text-[color:var(--ink)] px-2 py-1"
-                  >
-                    Later
-                  </button>
-                </div>
-              </div>
-            )}
-
             <Player
               videoId={videoId}
               isHost={isHost}
@@ -830,6 +801,12 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
         currentVideoId={videoId}
         onClose={() => setPickerOpen(false)}
         onPick={onPickVideo}
+      />
+
+      <WelcomeShareToast
+        open={welcomeOpen}
+        shareText={welcomeShareText}
+        onDismiss={dismissWelcome}
       />
     </div>
   );
