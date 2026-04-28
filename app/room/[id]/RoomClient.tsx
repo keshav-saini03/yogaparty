@@ -46,6 +46,10 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   const playerRef = useRef<PlayerHandle | null>(null);
   const suppressNextOutboundRef = useRef(false);
   const cooldownUntilRef = useRef(0);
+  // Host's last broadcast play/pause intent (1=playing, 2=paused). Used by
+  // viewer's <Player /> to force-correct any local divergence (e.g. user
+  // clicked the iframe through DevTools / keyboard).
+  const [enforceState, setEnforceState] = useState<number | null>(null);
 
   // Refs that listeners read so we don't have to re-register them on each
   // re-render (Supabase forbids `.on(...)` after `.subscribe()`).
@@ -106,6 +110,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     // ── Sync events ──────────────────────────────────────────────
     ch.on('broadcast', { event: 'sync_play' }, ({ payload }) => {
       const p = payload as { timestamp: number };
+      setEnforceState(1); // YT_PLAYING — viewers will be forced back if they pause
       if (!playerRef.current) return;
       suppressNextOutboundRef.current = true;
       playerRef.current.seekTo(p.timestamp, true);
@@ -114,6 +119,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
 
     ch.on('broadcast', { event: 'sync_pause' }, ({ payload }) => {
       const p = payload as { timestamp: number };
+      setEnforceState(2); // YT_PAUSED — viewers will be forced back if they play
       if (!playerRef.current) return;
       suppressNextOutboundRef.current = true;
       playerRef.current.pause();
@@ -325,6 +331,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
             <Player
               videoId={videoId}
               isHost={isHost}
+              enforceState={enforceState}
               onReady={(h) => {
                 playerRef.current = h;
               }}
