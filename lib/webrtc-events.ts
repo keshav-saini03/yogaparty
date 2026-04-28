@@ -63,6 +63,7 @@ export function isIcePayload(v: unknown): v is WebRtcIcePayload {
     isStr(v.from) &&
     isStr(v.to) &&
     isObj(v.candidate) &&
+    typeof v.candidate.candidate === 'string' &&
     isNum(v.sentAt)
   );
 }
