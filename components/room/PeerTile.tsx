@@ -35,14 +35,17 @@ export function PeerTile({
 }: Props) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
+  const showVideo = camOn;
+
   useEffect(() => {
     if (!videoRef.current) return;
     // Clear when stream goes null too, otherwise the <video> keeps showing
     // the last frame after camera-off / peer-disconnect.
+    // showVideo in the deps: when camOn flips false→true the <video> is
+    // freshly mounted with no srcObject; the stream reference may not have
+    // changed, so we need this dep to re-fire the assignment on remount.
     videoRef.current.srcObject = stream ?? null;
-  }, [stream]);
-
-  const showVideo = camOn;
+  }, [stream, showVideo]);
   const cityLabel = city && city !== 'GLOBAL' ? city : null;
 
   return (

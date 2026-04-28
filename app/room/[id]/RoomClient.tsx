@@ -88,6 +88,12 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   );
   const callStreamRef = useRef<MediaStream | null>(null);
 
+  // Mirror of the Player's slider value. Lifted to RoomClient so the auto-
+  // duck ceiling tracks the actual user setting instead of a constant. The
+  // Player still owns its slider state and reports up via onVolumeChange;
+  // we just mirror it here.
+  const [userVolume, setUserVolume] = useState<number>(80);
+
   // Derived: who in presence is currently on call (excluding self).
   const peersOnCall = useMemo(
     () =>
@@ -97,7 +103,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     [participants, self.user_id]
   );
 
-  const audioDuck = useAudioDuck({ userVolume: 80 });
+  const audioDuck = useAudioDuck({ userVolume });
 
   const peers = usePeerConnections({
     selfId: self.user_id,
@@ -542,6 +548,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
               }}
               onEvent={onPlayerEvent}
               duckedVolume={audioDuck.duckedVolume}
+              onVolumeChange={setUserVolume}
             />
 
             <div className="flex flex-wrap items-center justify-between gap-3">
