@@ -65,6 +65,12 @@ type Props = {
    * — slider state remains user-owned.
    */
   duckedVolume?: number;
+  /**
+   * Reports the current slider value to the parent. Lets the orchestrator
+   * mirror the user's volume into the audio-duck ceiling so duckedVolume
+   * tracks the slider rather than a hardcoded constant.
+   */
+  onVolumeChange?: (volume: number) => void;
 };
 
 export function Player({
@@ -75,6 +81,7 @@ export function Player({
   onEvent,
   className,
   duckedVolume,
+  onVolumeChange,
 }: Props) {
   const ytRef = useRef<YouTubePlayer | null>(null);
   const handleRef = useRef<PlayerHandle | null>(null);
@@ -104,6 +111,12 @@ export function Player({
       /* player may have been destroyed mid-update; safe to ignore */
     }
   }, [volume, duckedVolume, ready]);
+
+  // Report the slider value upward whenever it changes so the orchestrator
+  // can keep useAudioDuck's userVolume ceiling in sync.
+  useEffect(() => {
+    onVolumeChange?.(volume);
+  }, [volume, onVolumeChange]);
 
   // Imperative load when videoId changes — avoid full unmount/remount.
   useEffect(() => {
