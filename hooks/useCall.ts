@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
-import { MEDIA_CONSTRAINTS, MESH_RECONCILE_INTERVAL_MS } from '@/lib/webrtc-config';
+import { MEDIA_CONSTRAINTS } from '@/lib/webrtc-config';
 import { WEBRTC_EVENTS } from '@/lib/webrtc-events';
-import { pickInitiator } from '@/lib/webrtc-utils';
 
 export type CallState =
   | 'idle'
@@ -111,16 +110,14 @@ export function useCall(args: Args) {
     if (state !== 'on-call') {
       setState('on-call');
       await updatePresence(true);
-      const a = argsRef.current;
-      // Initiate offers to anyone we should reach (deterministic rule).
-      for (const peerId of a.peersOnCall()) {
-        if (pickInitiator(a.selfId, peerId)) {
-          await a.onCreateOfferTo?.(peerId);
-        }
-      }
+      // Mesh formation (offer initiation) is OWNED BY THE ORCHESTRATOR via a
+      // presence-watching effect on peersOnCall. Doing it here too caused a
+      // double-offer race: this loop AND the orchestrator's effect would
+      // each call createOfferTo for the same peer right after the state
+      // transition, the second offer would overwrite the first, the answer
+      // for the first would arrive against the wrong local description, and
+      // the PC would wedge on one side. Single source of truth wins.
     }
-    // Intentionally narrow — argsRef holds latest
-     
   }, [state, updatePresence]);
 
   const toggleMic = useCallback(async () => {
@@ -182,29 +179,11 @@ export function useCall(args: Args) {
      
   }, [state, updatePresence]);
 
-  // Mesh reconciliation tick — catches missed call_ends and self-heals.
-  // Depends only on `state`; reads fresh args from argsRef so the interval
-  // survives parent re-renders (the bug we're fixing).
-  useEffect(() => {
-    if (state !== 'on-call') return;
-    const id = window.setInterval(() => {
-      const a = argsRef.current;
-      const expected = a.peersOnCall();
-      // We don't have the actual PC set here; the orchestrator passes it in
-      // via onCreateOfferTo decisions. As a simplification we just (re-)offer
-      // to any expected peer for whom we should be initiator. The PC hook
-      // dedupes (returns existing slot) so this is idempotent.
-      for (const peerId of expected) {
-        if (pickInitiator(a.selfId, peerId)) {
-          a.onCreateOfferTo?.(peerId);
-        }
-      }
-      // Closures: anyone we have a PC with but who is no longer in expected
-      // is detected by the orchestrator's webrtc_call_end / iceconnection
-      // ladder; useCall doesn't own that bookkeeping.
-    }, MESH_RECONCILE_INTERVAL_MS);
-    return () => window.clearInterval(id);
-  }, [state]);
+  // Reconciliation moved to the orchestrator (RoomClient). useCall doesn't
+  // know about active PCs, so its previous tick blindly re-offered to all
+  // expected peers every 10 s, which forced renegotiation of healthy
+  // connections and could wedge them. RoomClient's tick checks
+  // peers.peerIds() before re-offering — only missing PCs are recreated.
 
   // Cleanup on unmount.
   useEffect(() => {

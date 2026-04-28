@@ -167,13 +167,11 @@ describe('useCall — leave teardown', () => {
   });
 });
 
-describe('useCall — reconciliation tick', () => {
-  it('every MESH_RECONCILE_INTERVAL_MS, re-offers to expected peers we should initiate to', async () => {
-    vi.useFakeTimers();
-
+describe('useCall — mesh initiation is delegated to the orchestrator', () => {
+  it('toggleMic does not call onCreateOfferTo — RoomClient owns mesh formation', async () => {
     const channel = makeChannel();
     const onCreateOfferTo = vi.fn(async () => {});
-    const peers = ['aaaa-peer', 'zzzz-peer']; // self='self' is lex-greater than 'aaaa-peer' but less than 'zzzz-peer'.
+    const peers = ['aaaa-peer', 'zzzz-peer'];
 
     const { result } = renderHook(() =>
       useCall({
@@ -188,58 +186,15 @@ describe('useCall — reconciliation tick', () => {
       await result.current.toggleMic();
     });
 
-    // First wave from enterMesh fired once for zzzz-peer.
-    expect(onCreateOfferTo).toHaveBeenCalledTimes(1);
-    expect(onCreateOfferTo).toHaveBeenLastCalledWith('zzzz-peer');
-
-    onCreateOfferTo.mockClear();
-
-    await act(async () => {
-      vi.advanceTimersByTime(10_000); // MESH_RECONCILE_INTERVAL_MS
-    });
-
-    expect(onCreateOfferTo).toHaveBeenCalledTimes(1);
-    expect(onCreateOfferTo).toHaveBeenLastCalledWith('zzzz-peer');
-
-    vi.useRealTimers();
-  });
-
-  it('reconciliation interval survives parent re-renders (does not reset)', async () => {
-    vi.useFakeTimers();
-
-    const channel = makeChannel();
-    const onCreateOfferTo = vi.fn(async () => {});
-    const peers = ['zzzz-peer'];
-
-    const { result, rerender } = renderHook(
-      ({ name }: { name: string }) =>
-        useCall({
-          selfId: 'self',
-          selfName: name,
-          channel: channel as never,
-          peersOnCall: () => peers,
-          onCreateOfferTo,
-        }),
-      { initialProps: { name: 'Alice' } }
+    // Previously enterMesh fired offers for lex-higher peers. We removed
+    // that loop because it raced with the orchestrator's eager-offer
+    // effect and caused double-offer wedges. useCall now only transitions
+    // state and updates presence; the orchestrator (RoomClient) drives
+    // all initiation.
+    expect(onCreateOfferTo).not.toHaveBeenCalled();
+    expect(result.current.state).toBe('on-call');
+    expect(channel.track).toHaveBeenCalledWith(
+      expect.objectContaining({ on_call_intent: true })
     );
-
-    await act(async () => {
-      await result.current.toggleMic();
-    });
-
-    onCreateOfferTo.mockClear();
-
-    // Simulate a parent re-render with a new args object on every tick.
-    for (let i = 0; i < 5; i++) {
-      rerender({ name: `Alice-${i}` });
-      await act(async () => {
-        vi.advanceTimersByTime(2_000);
-      });
-    }
-    // Total elapsed: 10s — ONE reconciliation tick should have fired.
-    expect(onCreateOfferTo).toHaveBeenCalledTimes(1);
-    expect(onCreateOfferTo).toHaveBeenCalledWith('zzzz-peer');
-
-    vi.useRealTimers();
   });
 });
