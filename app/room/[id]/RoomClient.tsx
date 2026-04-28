@@ -14,7 +14,6 @@ import type { ChatMsg } from '@/lib/room-types';
 import { CURATED_VIDEOS } from '@/lib/videos';
 import { pickVideo } from '@/app/actions/pick-video';
 import { bumpRoomActivity, closeRoomIfStale } from '@/app/actions/room-activity';
-import { WhatsAppShareButton } from '@/components/share/WhatsAppShareButton';
 import { postSignupCopy } from '@/lib/whatsapp';
 import {
   correctedTimestamp,
@@ -28,7 +27,7 @@ import { useCall } from '@/hooks/useCall';
 import { useAudioDuck } from '@/hooks/useAudioDuck';
 import { usePeerConnections } from '@/hooks/usePeerConnections';
 import { CallDock, type TileVm } from '@/components/room/CallDock';
-import { StartTalkingButton } from '@/components/room/StartTalkingButton';
+import { WelcomeShareToast } from '@/components/room/WelcomeShareToast';
 import {
   isOfferPayload,
   isAnswerPayload,
@@ -77,12 +76,16 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [unreadChat, setUnreadChat] = useState(0);
   const [pickError, setPickError] = useState<string | null>(null);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
 
   const playerRef = useRef<PlayerHandle | null>(null);
   const suppressNextOutboundRef = useRef(false);
   const cooldownUntilRef = useRef(0);
+  const chatOpenRef = useRef(chatOpen);
+  chatOpenRef.current = chatOpen;
+  const isDesktopRef = useRef(false);
   // Clock-sync state. clockOffsetRef = host_clock − viewer_clock (in ms);
   // 0 for the host. rttEmaRef is the smoothed round-trip in ms. Refs (not
   // state) because we read these inside event handlers registered before
@@ -293,6 +296,9 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     // ── Chat ─────────────────────────────────────────────────────
     ch.on('broadcast', { event: 'chat' }, ({ payload }) => {
       setMessages((prev) => [...prev, payload as ChatMsg]);
+      if (!isDesktopRef.current && !chatOpenRef.current) {
+        setUnreadChat((n) => n + 1);
+      }
     });
 
     // ── Video swap ───────────────────────────────────────────────
@@ -609,6 +615,20 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     setWelcomeOpen(true);
   }, [self.user_id]);
 
+  // Keep isDesktopRef in sync with the md+ breakpoint and clear any stale
+  // unread count whenever the sidebar becomes permanently visible.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const update = () => {
+      isDesktopRef.current = mq.matches;
+      if (mq.matches) setUnreadChat(0);
+    };
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
   const dismissWelcome = () => {
     setWelcomeOpen(false);
     if (typeof window !== 'undefined') {
@@ -674,7 +694,17 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       stream: remoteStreams.get(p.user_id) ?? null,
     }));
 
-  const dockEmpty = call.state === 'idle' && peerTiles.length === 0;
+  const onCallCount = useMemo(
+    () => participants.filter((p) => p.on_call_intent).length,
+    [participants]
+  );
+
+  const speakerName = useMemo(() => {
+    const ids = audioDuck.speakingPeerIds;
+    if (ids.length === 0) return null;
+    const id = ids[0];
+    return participants.find((p) => p.user_id === id)?.name ?? null;
+  }, [audioDuck.speakingPeerIds, participants]);
 
   const welcomeShareText = postSignupCopy({
     cityCount: participants.length,
@@ -691,42 +721,20 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
         city={roomCity}
         participantCount={participants.length}
         selfId={self.user_id}
-        onChatToggle={() => setChatOpen((v) => !v)}
+        onChatToggle={() => {
+          setChatOpen((v) => {
+            const next = !v;
+            if (next) setUnreadChat(0);
+            return next;
+          });
+        }}
         isMobileChatOpen={chatOpen}
+        unreadChat={unreadChat}
       />
 
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
         <main className="flex-1 flex flex-col min-w-0">
           <div className="flex-1 flex flex-col gap-4 p-4 sm:p-6">
-            {welcomeOpen && (
-              <div className="rise relative border border-[#19d27a] bg-[rgba(25,210,122,0.08)] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
-                <div className="min-w-0 flex-1">
-                  <p className="font-mono text-[0.62rem] tracking-[0.22em] uppercase text-[#19d27a]">
-                    You&apos;re tuned in
-                  </p>
-                  <p className="mt-1.5 font-display text-base sm:text-lg leading-snug text-[color:var(--ink)]">
-                    Drop the link in your group — it&apos;s better with people.
-                  </p>
-                </div>
-                <div className="flex items-center gap-2 flex-shrink-0">
-                  <WhatsAppShareButton
-                    text={welcomeShareText}
-                    label="Share now"
-                    variant="pill"
-                    onShare={dismissWelcome}
-                  />
-                  <button
-                    type="button"
-                    onClick={dismissWelcome}
-                    aria-label="Dismiss share prompt"
-                    className="font-mono text-[0.62rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)] hover:text-[color:var(--ink)] px-2 py-1"
-                  >
-                    Later
-                  </button>
-                </div>
-              </div>
-            )}
-
             <Player
               videoId={videoId}
               isHost={isHost}
@@ -737,44 +745,43 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
               onEvent={onPlayerEvent}
               duckedVolume={audioDuck.duckedVolume}
               onVolumeChange={setUserVolume}
+              hostControl={
+                isHost ? (
+                  <button
+                    type="button"
+                    onClick={() => setPickerOpen(true)}
+                    className="font-mono text-[0.58rem] tracking-[0.22em] uppercase border border-[color:var(--accent)] text-[color:var(--accent)] bg-black/70 backdrop-blur-[2px] px-2.5 py-1.5 hover:bg-[color:var(--accent-soft)] transition-colors"
+                  >
+                    Change video
+                  </button>
+                ) : null
+              }
             />
 
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="min-w-0">
-                {videoId ? (
-                  <>
-                    <p className="eyebrow">Now broadcasting</p>
-                    <p className="mt-1 font-display text-lg sm:text-xl text-[color:var(--ink)] truncate">
-                      {currentVideoMeta ? (
-                        currentVideoMeta.title
-                      ) : (
-                        <>
-                          Custom broadcast
-                          <span className="ml-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)]">
-                            {videoId}
-                          </span>
-                        </>
-                      )}
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="eyebrow">Broadcast queued</p>
-                    <p className="mt-1 font-display text-lg sm:text-xl text-[color:var(--ink-soft)]">
-                      Waiting for host pick.
-                    </p>
-                  </>
-                )}
-              </div>
-
-              {isHost && (
-                <button
-                  type="button"
-                  onClick={() => setPickerOpen(true)}
-                  className="font-mono text-[0.65rem] tracking-[0.22em] uppercase border border-[color:var(--accent)] text-[color:var(--accent)] px-3 py-2 hover:bg-[color:var(--accent-soft)] transition-colors"
-                >
-                  Change video
-                </button>
+            <div className="min-w-0">
+              {videoId ? (
+                <>
+                  <p className="eyebrow">Now broadcasting</p>
+                  <p className="mt-1 font-display text-lg sm:text-xl text-[color:var(--ink)] truncate">
+                    {currentVideoMeta ? (
+                      currentVideoMeta.title
+                    ) : (
+                      <>
+                        Custom broadcast
+                        <span className="ml-2 font-mono text-[0.65rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)]">
+                          {videoId}
+                        </span>
+                      </>
+                    )}
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="eyebrow">Broadcast queued</p>
+                  <p className="mt-1 font-display text-lg sm:text-xl text-[color:var(--ink-soft)]">
+                    Waiting for host pick.
+                  </p>
+                </>
               )}
             </div>
 
@@ -788,13 +795,12 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
               onToggleMic={() => void call.toggleMic()}
               onToggleCam={() => void call.toggleCam()}
               onLeave={() => void call.leave()}
+              onJoinClick={() => void call.toggleMic()}
+              listeningCount={participants.length}
+              onCallCount={onCallCount}
+              speakerName={speakerName}
+              ducked={audioDuck.duckedVolume < userVolume}
             />
-
-            {dockEmpty && (
-              <div className="flex pt-2">
-                <StartTalkingButton onClick={() => void call.toggleMic()} />
-              </div>
-            )}
 
             {pickError && (
               <p
@@ -811,6 +817,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
                 participants={participants}
                 hostId={hostId}
                 selfId={self.user_id}
+                speakingPeerIds={audioDuck.speakingPeerIds}
               />
             </section>
           </div>
@@ -830,6 +837,12 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
         currentVideoId={videoId}
         onClose={() => setPickerOpen(false)}
         onPick={onPickVideo}
+      />
+
+      <WelcomeShareToast
+        open={welcomeOpen}
+        shareText={welcomeShareText}
+        onDismiss={dismissWelcome}
       />
     </div>
   );

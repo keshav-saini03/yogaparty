@@ -1,86 +1,118 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
-import { CallDock } from './CallDock';
+import userEvent from '@testing-library/user-event';
+import { CallDock, type TileVm } from './CallDock';
 
-const noop = () => {};
+const baseProps = {
+  micEnabled: false,
+  camEnabled: false,
+  permissionError: null,
+  onToggleMic: () => {},
+  onToggleCam: () => {},
+  onLeave: () => {},
+  onJoinClick: () => {},
+  listeningCount: 4,
+  onCallCount: 0,
+  speakerName: null,
+  ducked: false,
+};
 
-describe('CallDock', () => {
-  it('renders nothing when nobody is on call (state=idle, no peer tiles)', () => {
-    const { container } = render(
+const tile = (id: string, name: string): TileVm => ({
+  peerId: id,
+  name,
+  city: 'Mumbai',
+  micOn: true,
+  camOn: false,
+  isLocal: false,
+  isSpeaking: false,
+});
+
+describe('CallDock ribbon', () => {
+  it('idle: seat 0 is the + Join call CTA', () => {
+    render(
       <CallDock
+        {...baseProps}
+        state="idle"
+        selfTile={null}
+        peerTiles={[tile('a', 'Riya'), tile('b', 'Jaya')]}
+      />
+    );
+    expect(screen.getByRole('button', { name: /join call/i })).toBeInTheDocument();
+    expect(screen.getByText(/Riya/)).toBeInTheDocument();
+    expect(screen.getByText(/Jaya/)).toBeInTheDocument();
+  });
+
+  it('on-call: seat 0 is self tile, controls visible', () => {
+    render(
+      <CallDock
+        {...baseProps}
+        state="on-call"
+        selfTile={{
+          peerId: 'self',
+          name: 'You',
+          city: 'BLR',
+          micOn: true,
+          camOn: false,
+          isLocal: true,
+          isSpeaking: false,
+        }}
+        peerTiles={[tile('a', 'Riya')]}
+        micEnabled
+      />
+    );
+    expect(screen.queryByRole('button', { name: /join call/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /leave/i })).toBeInTheDocument();
+  });
+
+  it('idle: clicking + Join calls onJoinClick', async () => {
+    const onJoinClick = vi.fn();
+    const user = userEvent.setup();
+    render(
+      <CallDock
+        {...baseProps}
         state="idle"
         selfTile={null}
         peerTiles={[]}
-        micEnabled={false}
-        camEnabled={false}
-        permissionError={null}
-        onToggleMic={noop}
-        onToggleCam={noop}
-        onLeave={noop}
+        onJoinClick={onJoinClick}
       />
     );
-    expect(container).toBeEmptyDOMElement();
+    await user.click(screen.getByRole('button', { name: /join call/i }));
+    expect(onJoinClick).toHaveBeenCalledTimes(1);
   });
 
-  it('renders self tile + controls when state=on-call and selfTile provided', () => {
+  it('eyebrow shows speaker name when on-call and someone is talking', () => {
     render(
       <CallDock
+        {...baseProps}
         state="on-call"
         selfTile={{
           peerId: 'self',
           name: 'You',
-          city: 'Mumbai',
+          city: null,
           micOn: true,
           camOn: false,
           isLocal: true,
           isSpeaking: false,
         }}
-        peerTiles={[]}
-        micEnabled
-        camEnabled={false}
-        permissionError={null}
-        onToggleMic={noop}
-        onToggleCam={noop}
-        onLeave={noop}
+        peerTiles={[tile('a', 'Riya')]}
+        onCallCount={2}
+        speakerName="Riya"
+        ducked
       />
     );
-    expect(screen.getByRole('button', { name: /leave/i })).toBeInTheDocument();
-    expect(screen.getByText(/waiting for others/i)).toBeInTheDocument();
+    expect(screen.getByText(/Riya is talking · audio ducked/i)).toBeInTheDocument();
   });
 
-  it('renders peer tiles when peers present', () => {
+  it('eyebrow shows listening count + no-call note when idle', () => {
     render(
       <CallDock
-        state="on-call"
-        selfTile={{
-          peerId: 'self',
-          name: 'You',
-          city: 'Mumbai',
-          micOn: true,
-          camOn: false,
-          isLocal: true,
-          isSpeaking: false,
-        }}
-        peerTiles={[
-          {
-            peerId: 'p1',
-            name: 'Priya',
-            city: 'Mumbai',
-            micOn: true,
-            camOn: false,
-            isLocal: false,
-            isSpeaking: false,
-          },
-        ]}
-        micEnabled
-        camEnabled={false}
-        permissionError={null}
-        onToggleMic={noop}
-        onToggleCam={noop}
-        onLeave={noop}
+        {...baseProps}
+        state="idle"
+        selfTile={null}
+        peerTiles={[tile('a', 'Riya')]}
+        listeningCount={4}
       />
     );
-    expect(screen.getByText(/Priya/)).toBeInTheDocument();
-    expect(screen.queryByText(/waiting for others/i)).toBeNull();
+    expect(screen.getByText(/04 listening · nobody on call yet/i)).toBeInTheDocument();
   });
 });

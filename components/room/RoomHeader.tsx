@@ -9,6 +9,8 @@ type Props = {
   selfId: string;
   onChatToggle?: () => void;
   isMobileChatOpen?: boolean;
+  /** Mobile-only unread message count. 0 hides the badge. */
+  unreadChat?: number;
 };
 
 export function RoomHeader({
@@ -17,6 +19,7 @@ export function RoomHeader({
   selfId,
   onChatToggle,
   isMobileChatOpen,
+  unreadChat = 0,
 }: Props) {
   const cityLabel = city && city !== 'GLOBAL' ? city : 'around the world';
   const countLabel = participantCount === 1 ? '1 person' : `${participantCount} people`;
@@ -65,11 +68,26 @@ export function RoomHeader({
             <button
               type="button"
               onClick={onChatToggle}
-              className="md:hidden font-mono text-[0.62rem] tracking-[0.2em] uppercase text-[color:var(--ink)] border border-[color:var(--line)] px-2 py-1 hover:border-[color:var(--accent)]"
+              className="md:hidden relative font-mono text-[0.62rem] tracking-[0.2em] uppercase text-[color:var(--ink)] border border-[color:var(--line)] px-2 py-1 hover:border-[color:var(--accent)]"
               aria-expanded={isMobileChatOpen ? 'true' : 'false'}
-              aria-label={isMobileChatOpen ? 'Close chat' : 'Open chat'}
+              aria-label={
+                isMobileChatOpen
+                  ? 'Close chat'
+                  : unreadChat > 0
+                    ? `Open chat, ${unreadChat} unread message${unreadChat === 1 ? '' : 's'}`
+                    : 'Open chat'
+              }
             >
               {isMobileChatOpen ? 'Close' : 'Chat'}
+              {!isMobileChatOpen && unreadChat > 0 && (
+                <span
+                  data-testid="chat-unread-badge"
+                  className="absolute -top-1.5 -right-1.5 min-w-[1.1rem] h-[1.1rem] px-1 inline-flex items-center justify-center bg-[color:var(--accent)] text-[color:var(--bg)] font-mono text-[0.55rem] tracking-[0.06em] tabular-nums"
+                  aria-hidden="true"
+                >
+                  {unreadChat > 9 ? '9+' : unreadChat}
+                </span>
+              )}
             </button>
           )}
 

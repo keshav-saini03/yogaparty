@@ -1,10 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { CallControls } from './CallControls';
 import { HeadphonesTip } from './HeadphonesTip';
 import { PeerTile } from './PeerTile';
 import { HEADPHONES_TIP_KEY } from '@/lib/webrtc-config';
+import { formatRoomEyebrow } from '@/lib/room-format';
 import type { CallState } from '@/hooks/useCall';
 
 export type TileVm = {
@@ -28,7 +29,16 @@ type Props = {
   onToggleMic: () => void;
   onToggleCam: () => void;
   onLeave: () => void;
+  /** Called when the + Join CTA tile is clicked while idle. */
+  onJoinClick: () => void;
+  /** Counts and speaker info for the eyebrow line. */
+  listeningCount: number;
+  onCallCount: number;
+  speakerName: string | null;
+  ducked: boolean;
 };
+
+const SEATS = 7;
 
 export function CallDock({
   state,
@@ -40,10 +50,14 @@ export function CallDock({
   onToggleMic,
   onToggleCam,
   onLeave,
+  onJoinClick,
+  listeningCount,
+  onCallCount,
+  speakerName,
+  ducked,
 }: Props) {
   const [tipOpen, setTipOpen] = useState(false);
 
-  // First-mic-on: open the tip if we haven't shown it yet.
   useEffect(() => {
     if (!micEnabled) return;
     if (typeof window === 'undefined') return;
@@ -51,62 +65,91 @@ export function CallDock({
     setTipOpen(true);
   }, [micEnabled]);
 
-  // Empty state — no self tile and no peers.
-  const empty = !selfTile && peerTiles.length === 0;
-  if (empty) return null;
+  const eyebrow = formatRoomEyebrow({
+    listening: listeningCount,
+    onCall: onCallCount,
+    speakerName,
+    ducked,
+  });
 
-  const allTiles: TileVm[] = selfTile ? [selfTile, ...peerTiles] : [...peerTiles];
-  const totalCount = allTiles.length;
+  const seats: ReactNode[] = [];
+  const isOnCall = state === 'on-call';
+
+  if (!isOnCall) {
+    seats.push(
+      <button
+        key="join"
+        type="button"
+        onClick={onJoinClick}
+        aria-label="Join call"
+        className="aspect-[4/3] border border-[color:var(--accent)] bg-[color:var(--accent-soft)] text-[color:var(--accent)] flex flex-col items-center justify-center gap-1 hover:bg-[rgba(245,180,0,0.18)] transition-colors"
+      >
+        <span aria-hidden className="text-2xl leading-none">+</span>
+        <span className="font-mono text-[0.55rem] tracking-[0.22em] uppercase">Join call</span>
+      </button>
+    );
+    for (const t of peerTiles.slice(0, SEATS - 1)) {
+      seats.push(<PeerTile key={t.peerId} {...t} />);
+    }
+    while (seats.length < SEATS) seats.push(<EmptySeat key={`e${seats.length}`} />);
+  } else {
+    if (selfTile) seats.push(<PeerTile key={selfTile.peerId} {...selfTile} />);
+    for (const t of peerTiles.slice(0, SEATS - (selfTile ? 1 : 0))) {
+      seats.push(<PeerTile key={t.peerId} {...t} />);
+    }
+    while (seats.length < SEATS) seats.push(<EmptySeat key={`e${seats.length}`} />);
+  }
 
   return (
     <section
       aria-label="Call participants"
-      className="dock-reveal mt-5 pt-4 border-t border-[color:var(--line)] space-y-4"
+      className="dock-reveal mt-5 pt-4 border-t border-[color:var(--line)] space-y-3"
     >
-      {/* Header — eyebrow + tally row + count */}
       <div className="flex items-center gap-3 flex-wrap">
         <p className="eyebrow flex items-center gap-2">
           <span className="pulse-dot" aria-hidden />
-          On call
+          {isOnCall ? 'On call' : 'In the room'}
         </p>
-        <span className="tally-row" aria-hidden>
-          {allTiles.map((t) => (
-            <span key={t.peerId} data-on={t.isSpeaking ? 'true' : 'false'} />
-          ))}
+        <span
+          aria-live="polite"
+          className="font-mono text-[0.6rem] tracking-[0.18em] uppercase text-[color:var(--ink-soft)]"
+        >
+          {eyebrow}
         </span>
         <span className="ml-auto font-mono tabular-nums text-[0.62rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)]">
-          {totalCount.toString().padStart(2, '0')}{' '}
-          / {Math.max(7, totalCount).toString().padStart(2, '0')}
+          {onCallCount.toString().padStart(2, '0')} / {SEATS.toString().padStart(2, '0')}
         </span>
       </div>
 
-      {/* Tile grid — 3 cols mobile, expanding to 6 on lg */}
-      <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
-        {selfTile && <PeerTile {...selfTile} />}
-        {peerTiles.map((t) => (
-          <PeerTile key={t.peerId} {...t} />
-        ))}
+      <div className="grid grid-cols-5 sm:grid-cols-6 md:grid-cols-7 gap-2 sm:gap-3">
+        {seats}
       </div>
 
-      {peerTiles.length === 0 && state === 'on-call' && (
-        <p className="font-mono text-[0.6rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)] border-l-2 border-[color:var(--ink-faint)] pl-3">
-          Waiting for others to join the call.
-        </p>
+      {isOnCall && (
+        <CallControls
+          state={state}
+          micEnabled={micEnabled}
+          camEnabled={camEnabled}
+          permissionError={permissionError}
+          onToggleMic={onToggleMic}
+          onToggleCam={onToggleCam}
+          onLeave={onLeave}
+          onShowTip={() => setTipOpen(true)}
+        />
       )}
-
-      {/* Controls row */}
-      <CallControls
-        state={state}
-        micEnabled={micEnabled}
-        camEnabled={camEnabled}
-        permissionError={permissionError}
-        onToggleMic={onToggleMic}
-        onToggleCam={onToggleCam}
-        onLeave={onLeave}
-        onShowTip={() => setTipOpen(true)}
-      />
 
       <HeadphonesTip open={tipOpen} onClose={() => setTipOpen(false)} />
     </section>
+  );
+}
+
+function EmptySeat() {
+  return (
+    <div
+      aria-hidden
+      className="aspect-[4/3] border border-dashed border-[color:var(--ink-faint)] flex items-center justify-center text-[color:var(--ink-faint)] text-xs"
+    >
+      ·
+    </div>
   );
 }
