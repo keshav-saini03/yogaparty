@@ -142,7 +142,11 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   // Keep `getLocalStream` returning the latest stream after `useCall` acquires it.
   useEffect(() => {
     callStreamRef.current = call.getStream();
-  }, [call.state, call.micEnabled, call.camEnabled, call]);
+    // The three primitive deps cover every state transition that can change
+    // what getStream() returns; `call` itself is a fresh object each render
+    // and would just thrash this effect to no effect.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [call.state, call.micEnabled, call.camEnabled]);
 
   const {
     emitPlayerEvent,
