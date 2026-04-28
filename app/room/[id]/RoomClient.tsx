@@ -27,7 +27,6 @@ import { useCall } from '@/hooks/useCall';
 import { useAudioDuck } from '@/hooks/useAudioDuck';
 import { usePeerConnections } from '@/hooks/usePeerConnections';
 import { CallDock, type TileVm } from '@/components/room/CallDock';
-import { StartTalkingButton } from '@/components/room/StartTalkingButton';
 import { WelcomeShareToast } from '@/components/room/WelcomeShareToast';
 import {
   isOfferPayload,
@@ -695,7 +694,17 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
       stream: remoteStreams.get(p.user_id) ?? null,
     }));
 
-  const dockEmpty = call.state === 'idle' && peerTiles.length === 0;
+  const onCallCount = useMemo(
+    () => participants.filter((p) => p.on_call_intent).length,
+    [participants]
+  );
+
+  const speakerName = useMemo(() => {
+    const ids = audioDuck.speakingPeerIds;
+    if (ids.length === 0) return null;
+    const id = ids[0];
+    return participants.find((p) => p.user_id === id)?.name ?? null;
+  }, [audioDuck.speakingPeerIds, participants]);
 
   const welcomeShareText = postSignupCopy({
     cityCount: participants.length,
@@ -786,13 +795,12 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
               onToggleMic={() => void call.toggleMic()}
               onToggleCam={() => void call.toggleCam()}
               onLeave={() => void call.leave()}
+              onJoinClick={() => void call.toggleMic()}
+              listeningCount={participants.length}
+              onCallCount={onCallCount}
+              speakerName={speakerName}
+              ducked={audioDuck.duckedVolume < userVolume}
             />
-
-            {dockEmpty && (
-              <div className="flex pt-2">
-                <StartTalkingButton onClick={() => void call.toggleMic()} />
-              </div>
-            )}
 
             {pickError && (
               <p
