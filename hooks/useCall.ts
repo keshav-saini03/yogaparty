@@ -190,6 +190,43 @@ export function useCall(args: Args) {
      
   }, [state, acquireStream, enterMesh, camEnabled]);
 
+  /**
+   * Adopt an already-acquired MediaStream. Used by PreJoinPreview, which
+   * holds the stream during the cam/mic confirmation step and hands it
+   * over here without re-prompting the OS for permission. Mirrors the
+   * acquireStream → toggleMic happy path minus getUserMedia.
+   *
+   * Track-enabled state rides on the flags the caller supplies — a user
+   * who toggled cam off in the preview gets a disabled video track here.
+   */
+  const adoptStream = useCallback(
+    async (
+      stream: MediaStream,
+      flags: { mic: boolean; cam: boolean }
+    ) => {
+      if (state === 'leaving') return;
+
+      for (const t of stream.getAudioTracks()) t.enabled = flags.mic;
+      for (const t of stream.getVideoTracks()) t.enabled = flags.cam;
+
+      streamRef.current = stream;
+      setMic(flags.mic);
+      setCam(flags.cam);
+      setPermissionError(null);
+
+      // Same fire-and-forget side-effect acquireStream does — lets PCs that
+      // were built from an inbound offer before permission resolved attach
+      // these tracks via replaceTrack.
+      void argsRef.current.onStreamAcquired?.(stream);
+
+      // Drive into the mesh via the same path toggleMic uses. enterMesh
+      // owns the state transition (`setState('on-call')`) AND the presence
+      // update (`updatePresence(true)`), so we don't duplicate either.
+      await enterMesh();
+    },
+    [state, enterMesh]
+  );
+
   const leave = useCallback(async () => {
     if (state === 'idle' || state === 'leaving') return;
     setState('leaving');
@@ -239,5 +276,6 @@ export function useCall(args: Args) {
     toggleCam,
     leave,
     getStream: () => streamRef.current,
+    adoptStream,
   };
 }

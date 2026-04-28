@@ -198,3 +198,42 @@ describe('useCall — mesh initiation is delegated to the orchestrator', () => {
     );
   });
 });
+
+describe('useCall.adoptStream', () => {
+  it('transitions to on-call without calling getUserMedia', async () => {
+    const gum = vi
+      .spyOn(navigator.mediaDevices, 'getUserMedia')
+      .mockImplementation(() => Promise.reject(new Error('should not be called')));
+
+    const fakeAudio = { kind: 'audio', enabled: true, stop: vi.fn() } as unknown as MediaStreamTrack;
+    const fakeVideo = { kind: 'video', enabled: true, stop: vi.fn() } as unknown as MediaStreamTrack;
+    const fakeStream = {
+      getAudioTracks: () => [fakeAudio],
+      getVideoTracks: () => [fakeVideo],
+      getTracks: () => [fakeAudio, fakeVideo],
+    } as unknown as MediaStream;
+
+    const onStreamAcquired = vi.fn();
+    const { result } = renderHook(() =>
+      useCall({
+        selfId: 'u1',
+        channel: null,
+        peersOnCall: () => [],
+        onStreamAcquired,
+      })
+    );
+
+    expect(result.current.state).toBe('idle');
+
+    await act(async () => {
+      await result.current.adoptStream(fakeStream, { mic: true, cam: false });
+    });
+
+    expect(result.current.state).toBe('on-call');
+    expect(result.current.micEnabled).toBe(true);
+    expect(result.current.camEnabled).toBe(false);
+    expect(result.current.getStream()).toBe(fakeStream);
+    expect(onStreamAcquired).toHaveBeenCalledWith(fakeStream);
+    expect(gum).not.toHaveBeenCalled();
+  });
+});
