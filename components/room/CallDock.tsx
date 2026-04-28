@@ -55,23 +55,46 @@ export function CallDock({
   const empty = !selfTile && peerTiles.length === 0;
   if (empty) return null;
 
+  const allTiles: TileVm[] = selfTile ? [selfTile, ...peerTiles] : [...peerTiles];
+  const totalCount = allTiles.length;
+
   return (
     <section
       aria-label="Call participants"
-      className="border-t border-[color:var(--line)] pt-4 mt-4 space-y-3"
+      className="dock-reveal mt-5 pt-4 border-t border-[color:var(--line)] space-y-4"
     >
-      <p className="eyebrow">On call · {peerTiles.length + (selfTile ? 1 : 0)}</p>
+      {/* Header — eyebrow + tally row + count */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <p className="eyebrow flex items-center gap-2">
+          <span className="pulse-dot" aria-hidden />
+          On call
+        </p>
+        <span className="tally-row" aria-hidden>
+          {allTiles.map((t) => (
+            <span key={t.peerId} data-on={t.isSpeaking ? 'true' : 'false'} />
+          ))}
+        </span>
+        <span className="ml-auto font-mono tabular-nums text-[0.62rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)]">
+          {totalCount.toString().padStart(2, '0')}{' '}
+          / {Math.max(7, totalCount).toString().padStart(2, '0')}
+        </span>
+      </div>
+
+      {/* Tile grid — 3 cols mobile, expanding to 6 on lg */}
       <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 sm:gap-3">
         {selfTile && <PeerTile {...selfTile} />}
         {peerTiles.map((t) => (
           <PeerTile key={t.peerId} {...t} />
         ))}
       </div>
+
       {peerTiles.length === 0 && state === 'on-call' && (
-        <p className="font-mono text-[0.65rem] tracking-[0.18em] uppercase text-[color:var(--ink-mute)]">
+        <p className="font-mono text-[0.6rem] tracking-[0.22em] uppercase text-[color:var(--ink-mute)] border-l-2 border-[color:var(--ink-faint)] pl-3">
           Waiting for others to join the call.
         </p>
       )}
+
+      {/* Controls row */}
       <CallControls
         state={state}
         micEnabled={micEnabled}
@@ -82,6 +105,7 @@ export function CallDock({
         onLeave={onLeave}
         onShowTip={() => setTipOpen(true)}
       />
+
       <HeadphonesTip open={tipOpen} onClose={() => setTipOpen(false)} />
     </section>
   );

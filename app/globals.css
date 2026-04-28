@@ -285,3 +285,299 @@ body {
   border-color: var(--ink-mute);
   box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.5);
 }
+
+/* ─────────────────────────────────────────────────────────────────
+   Call dock — tile speaking VU meter
+   5 vertical bars climb when [data-speaking="true"] on the tile.
+   Each bar has its own animation phase so the column "lights up"
+   from bottom → top, then drops, the way a real meter reads.
+   ───────────────────────────────────────────────────────────────── */
+.tile-vu {
+  position: absolute;
+  top: 0.4rem;
+  right: 0.4rem;
+  bottom: 0.4rem;
+  width: 0.32rem;
+  display: grid;
+  grid-template-rows: repeat(5, 1fr);
+  gap: 0.12rem;
+  pointer-events: none;
+  z-index: 3;
+}
+.tile-vu span {
+  display: block;
+  background: var(--ink-faint);
+  transition: background 120ms ease;
+}
+[data-speaking='true'] .tile-vu span {
+  animation: vu-climb 920ms cubic-bezier(0.5, 0.05, 0.3, 1) infinite;
+}
+[data-speaking='true'] .tile-vu span:nth-child(1) { animation-delay: 0ms; }
+[data-speaking='true'] .tile-vu span:nth-child(2) { animation-delay: 60ms; }
+[data-speaking='true'] .tile-vu span:nth-child(3) { animation-delay: 120ms; }
+[data-speaking='true'] .tile-vu span:nth-child(4) { animation-delay: 180ms; }
+[data-speaking='true'] .tile-vu span:nth-child(5) { animation-delay: 240ms; }
+
+@keyframes vu-climb {
+  0%, 100% { background: var(--ink-faint); }
+  40%      { background: var(--accent); box-shadow: 0 0 6px rgba(245, 180, 0, 0.5); }
+  70%      { background: var(--ink-faint); }
+}
+
+/* Speaking tally — small accent block + "ON" label, top-left of the
+   tile when active. Replaces the simpler border-only treatment with
+   a broadcast-style "tally is live" reading. */
+.tile-tally {
+  position: absolute;
+  top: 0.4rem;
+  left: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.18rem 0.36rem 0.16rem;
+  font-family: var(--font-mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: #0a0a0c;
+  background: var(--accent);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 140ms ease, transform 200ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  pointer-events: none;
+  z-index: 3;
+}
+[data-speaking='true'] .tile-tally {
+  opacity: 1;
+  transform: translateY(0);
+}
+.tile-tally::before {
+  content: '';
+  display: block;
+  width: 0.34rem;
+  height: 0.34rem;
+  background: #0a0a0c;
+}
+
+/* CRT scanline overlay on the <video> — sells "broadcast monitor"
+   without obscuring faces. Sub-8% opacity per spec. */
+.tile-scan {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.05) 0px,
+    rgba(255, 255, 255, 0.05) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: overlay;
+  opacity: 0.55;
+  z-index: 2;
+}
+
+/* Display monogram for the camera-off fallback. Uses the variable
+   display font with an italic + SOFT axis, sized to read at any
+   tile width. */
+.tile-monogram {
+  font-family: var(--font-display), ui-serif, Georgia, serif;
+  font-style: italic;
+  font-variation-settings: 'SOFT' 100;
+  font-weight: 300;
+  font-size: clamp(2.25rem, 6.5vw, 3.25rem);
+  letter-spacing: -0.02em;
+  line-height: 1;
+  color: var(--ink-soft);
+  text-shadow: 0 0 24px rgba(245, 180, 0, 0.06);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   Call panel buttons (.panel-btn, .panel-btn--accent, .panel-btn--leave)
+   Tactile broadcast-equipment buttons. Press = translateY(1px), no
+   shadow puff. Off state = ink-mute outline; on state = accent fill.
+   ───────────────────────────────────────────────────────────────── */
+.panel-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.4rem 0.7rem;
+  background: var(--bg-raised);
+  border: 1px solid var(--line);
+  color: var(--ink-mute);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease, background 140ms ease,
+    transform 80ms ease;
+}
+.panel-btn:hover {
+  color: var(--ink);
+  border-color: var(--ink-mute);
+}
+.panel-btn:active {
+  transform: translateY(1px);
+}
+.panel-btn:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.panel-btn--accent {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.panel-btn--accent:hover {
+  color: #ffd24a;
+  border-color: #ffd24a;
+  background: rgba(245, 180, 0, 0.18);
+}
+
+.panel-btn--leave:hover {
+  color: #ff7878;
+  border-color: #ff7878;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255, 120, 120, 0.08) 0 6px,
+      transparent 6px 12px
+    ),
+    var(--bg-raised);
+}
+
+.panel-btn[data-locked='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+/* ON CALL pill — uses the existing pulse-dot for the "live" signal,
+   but framed in an accent border to read as a state-indicator. */
+.oncall-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--accent);
+  color: var(--accent);
+  font-family: var(--font-mono);
+  font-size: 0.6rem;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  background: rgba(245, 180, 0, 0.08);
+}
+
+/* Start Talking ghost CTA — soft pulse to draw the eye in the empty
+   state. Uses --accent-soft so it doesn't shout. */
+.start-talking {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.55rem 0.95rem;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+  border: 1px solid var(--line);
+  color: var(--ink-mute);
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: color 140ms ease, border-color 140ms ease;
+  position: relative;
+}
+.start-talking::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border: 1px solid var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  animation: start-pulse 2.4s ease-in-out infinite;
+}
+.start-talking:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.start-talking:hover::before {
+  animation-duration: 1.6s;
+}
+.start-talking:focus-visible {
+  outline: 1px solid var(--accent);
+  outline-offset: 3px;
+}
+
+@keyframes start-pulse {
+  0%, 100% { opacity: 0; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(1.04); }
+}
+
+/* Headphones tip banner — slim, scan-bordered. Slides up on enter. */
+.tip-banner {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(245, 180, 0, 0.04),
+      rgba(245, 180, 0, 0.10)
+    );
+  border-left: 2px solid var(--accent);
+  max-width: 36rem;
+  animation: tip-rise 360ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+.tip-banner::before,
+.tip-banner::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background-image: repeating-linear-gradient(
+    to right,
+    var(--accent) 0 4px,
+    transparent 4px 8px
+  );
+  opacity: 0.45;
+}
+.tip-banner::before { top: 0; }
+.tip-banner::after { bottom: 0; }
+
+@keyframes tip-rise {
+  from { opacity: 0; transform: translateY(0.4rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Tally row — one tiny block per attached peer. Lights when peer is
+   speaking. Sits in the dock header next to the eyebrow. */
+.tally-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.18rem;
+}
+.tally-row span {
+  display: block;
+  width: 0.55rem;
+  height: 0.32rem;
+  background: var(--ink-faint);
+  transition: background 160ms ease, box-shadow 160ms ease;
+}
+.tally-row span[data-on='true'] {
+  background: var(--accent);
+  box-shadow: 0 0 6px rgba(245, 180, 0, 0.55);
+}
+
+/* Subtle reveal for the dock when it first appears. Same easing as
+   the .rise utility but no opacity flash on every render. */
+.dock-reveal {
+  animation: dock-rise 360ms cubic-bezier(0.2, 0.7, 0.2, 1);
+}
+@keyframes dock-rise {
+  from { opacity: 0; transform: translateY(0.5rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}

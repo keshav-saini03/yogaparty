@@ -50,42 +50,78 @@ export function PeerTile({
       data-peer-id={peerId}
       data-speaking={isSpeaking ? 'true' : 'false'}
       className={`relative aspect-[4/3] bg-[color:var(--bg-raised)] border ${
-        isSpeaking ? 'border-[color:var(--accent)]' : 'border-[color:var(--line)]'
+        isSpeaking
+          ? 'border-[color:var(--accent)]'
+          : 'border-[color:var(--line)]'
       } overflow-hidden`}
     >
       {showVideo ? (
-        <video
-          ref={videoRef}
-          autoPlay
-          playsInline
-          muted={isLocal}
-          data-mirrored={isLocal ? 'true' : 'false'}
-          className="w-full h-full object-cover"
-          style={isLocal ? { transform: 'scaleX(-1)' } : undefined}
-        />
+        <>
+          <video
+            ref={videoRef}
+            autoPlay
+            playsInline
+            muted={isLocal}
+            data-mirrored={isLocal ? 'true' : 'false'}
+            className="w-full h-full object-cover"
+            style={isLocal ? { transform: 'scaleX(-1)' } : undefined}
+          />
+          <span className="tile-scan" aria-hidden />
+        </>
       ) : (
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="font-mono uppercase tracking-[0.18em] text-[color:var(--ink-soft)] text-2xl">
-            {monogram(name)}
+        <div className="absolute inset-0 flex items-center justify-center select-none">
+          <span className="tile-monogram" aria-hidden>
+            {monogram(name) || '·'}
           </span>
         </div>
       )}
-      <div className="absolute bottom-1.5 left-2 right-2 flex items-center justify-between gap-2">
-        <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-[color:var(--ink)] truncate">
+
+      {/* Tally — appears when the peer is speaking */}
+      <span className="tile-tally" aria-hidden>
+        ON
+      </span>
+
+      {/* VU meter — 5 bars on the right edge, animated when speaking */}
+      <span className="tile-vu" aria-hidden>
+        <span />
+        <span />
+        <span />
+        <span />
+        <span />
+      </span>
+
+      {/* Bottom strip — name · city + stroke-SVG mic glyph */}
+      <div className="absolute bottom-0 left-0 right-0 flex items-center justify-between gap-2 px-2 py-1.5 bg-gradient-to-t from-black/85 via-black/55 to-transparent">
+        <span className="font-mono text-[0.58rem] sm:text-[0.62rem] uppercase tracking-[0.18em] text-[color:var(--ink)] truncate">
           {isLocal ? 'You' : name}
           {cityLabel && (
             <span className="text-[color:var(--ink-mute)]"> · {cityLabel}</span>
           )}
         </span>
-        <span
-          aria-label={micOn ? 'mic on' : 'mic off'}
-          className={`font-mono text-[0.6rem] tracking-[0.18em] uppercase ${
-            micOn ? 'text-[color:var(--accent)]' : 'text-[color:var(--ink-mute)] line-through'
-          }`}
-        >
-          🎤
-        </span>
+        <MicGlyph on={micOn} />
       </div>
     </div>
+  );
+}
+
+function MicGlyph({ on }: { on: boolean }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke={on ? 'var(--accent)' : 'var(--ink-mute)'}
+      strokeWidth="1.4"
+      strokeLinecap="square"
+      aria-label={on ? 'mic on' : 'mic off'}
+      role="img"
+      className="flex-none"
+    >
+      <rect x="6" y="2" width="4" height="7" rx="2" />
+      <path d="M3.5 8c0 2.5 2 4.5 4.5 4.5s4.5-2 4.5-4.5" />
+      <line x1="8" y1="12.5" x2="8" y2="14" />
+      {!on && <line x1="2" y1="2" x2="14" y2="14" stroke="var(--ink-mute)" />}
+    </svg>
   );
 }
