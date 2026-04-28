@@ -23,6 +23,7 @@ import {
   shouldCorrect,
   type Participant,
 } from '@/lib/sync-utils';
+import { pickInitiator } from '@/lib/webrtc-utils';
 import { useCall } from '@/hooks/useCall';
 import { useAudioDuck } from '@/hooks/useAudioDuck';
 import { usePeerConnections } from '@/hooks/usePeerConnections';
@@ -153,6 +154,38 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     // and would just thrash this effect to no effect.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [call.state, call.micEnabled, call.camEnabled]);
+
+  // ── Eager mesh formation on presence change ───────────────────────
+  // Without this, the polite-peer race leaves the mesh empty for up to 10 s
+  // (until the reconciliation tick fires). When user A toggles first, A's
+  // initial enterMesh sees an empty peersOnCall and offers nothing. When B
+  // toggles second, B's enterMesh sees A but only offers if B is lex-lower
+  // — otherwise nobody initiates. This effect fires on every presence
+  // change while we're on-call and creates offers to any newly-arrived
+  // lex-lower peers.
+  //
+  // Tracked via a ref Set so we never re-offer to an existing PC (which
+  // would force a re-negotiation and disrupt an active connection).
+  const meshInitiatedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    if (call.state !== 'on-call') {
+      meshInitiatedRef.current.clear();
+      return;
+    }
+    for (const peerId of peersOnCall) {
+      if (meshInitiatedRef.current.has(peerId)) continue;
+      meshInitiatedRef.current.add(peerId);
+      if (pickInitiator(self.user_id, peerId)) {
+        void peers.createOfferTo(peerId);
+      }
+    }
+    // Drop peers that left — lets us re-initiate if they later return.
+    for (const known of [...meshInitiatedRef.current]) {
+      if (!peersOnCall.includes(known)) {
+        meshInitiatedRef.current.delete(known);
+      }
+    }
+  }, [peersOnCall, call.state, self.user_id, peers]);
 
   const {
     emitPlayerEvent,
