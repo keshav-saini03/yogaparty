@@ -111,6 +111,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     channel,
     getLocalStream: () => callStreamRef.current,
     onRemoteStream: (peerId, stream) => {
+      console.log('[rtc] onRemoteStream', { peer: peerId, tracks: stream.getTracks().length });
       setRemoteStreams((prev) => {
         const next = new Map(prev);
         next.set(peerId, stream);
@@ -149,6 +150,10 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   // Keep `getLocalStream` returning the latest stream after `useCall` acquires it.
   useEffect(() => {
     callStreamRef.current = call.getStream();
+    console.log('[rtc] callStreamRef sync', {
+      state: call.state,
+      hasStream: !!callStreamRef.current,
+    });
     // The three primitive deps cover every state transition that can change
     // what getStream() returns; `call` itself is a fresh object each render
     // and would just thrash this effect to no effect.
@@ -166,9 +171,16 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   // also prevents the reconciliation from re-negotiating healthy ones.
   const initiateMissingPeers = useCallback(() => {
     const existing = new Set(peers.peerIds());
+    console.log('[rtc] initiateMissingPeers', {
+      self: self.user_id,
+      peersOnCall,
+      existing: [...existing],
+    });
     for (const peerId of peersOnCall) {
       if (existing.has(peerId)) continue;
-      if (!pickInitiator(self.user_id, peerId)) continue;
+      const initiate = pickInitiator(self.user_id, peerId);
+      console.log('[rtc] decide', { self: self.user_id, peer: peerId, initiate });
+      if (!initiate) continue;
       void peers.createOfferTo(peerId);
     }
   }, [peers, peersOnCall, self.user_id]);

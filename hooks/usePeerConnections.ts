@@ -98,6 +98,8 @@ export function usePeerConnections(args: Args): PeerConnections {
       pc.addTransceiver('video', { direction: 'sendrecv' });
 
       const local = args.getLocalStream();
+      const trackCount = local?.getTracks().length ?? 0;
+      console.log('[rtc] buildPc', { self: args.selfId, peer: peerId, hasLocal: !!local, trackCount });
       if (local) {
         for (const track of local.getTracks()) pc.addTrack(track, local);
       }
@@ -113,6 +115,7 @@ export function usePeerConnections(args: Args): PeerConnections {
       };
 
       pc.ontrack = (e) => {
+        console.log('[rtc] ontrack', { self: args.selfId, peer: peerId, kind: e.track.kind, hasStream: !!e.streams[0] });
         if (e.streams[0]) args.onRemoteStream?.(peerId, e.streams[0]);
       };
 
@@ -150,6 +153,7 @@ export function usePeerConnections(args: Args): PeerConnections {
 
       pc.oniceconnectionstatechange = () => {
         const s = pc.iceConnectionState;
+        console.log('[rtc] iceState', { self: args.selfId, peer: peerId, state: s });
         if (s === 'connected' || s === 'completed') {
           if (slot.graceTimer !== null) {
             window.clearTimeout(slot.graceTimer);
@@ -199,6 +203,7 @@ export function usePeerConnections(args: Args): PeerConnections {
 
   const createOfferTo = useCallback(
     async (peerId: string) => {
+      console.log('[rtc] createOfferTo →', { self: args.selfId, peer: peerId });
       const { pc } = ensureSlot(peerId);
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
@@ -214,6 +219,7 @@ export function usePeerConnections(args: Args): PeerConnections {
 
   const handleOffer = useCallback(
     async (p: WebRtcOfferPayload) => {
+      console.log('[rtc] handleOffer ←', { self: args.selfId, from: p.from });
       const { pc } = ensureSlot(p.from);
       await pc.setRemoteDescription({ type: 'offer', sdp: p.sdp });
       const answer = await pc.createAnswer();
@@ -229,18 +235,29 @@ export function usePeerConnections(args: Args): PeerConnections {
   );
 
   const handleAnswer = useCallback(async (p: WebRtcAnswerPayload) => {
+    console.log('[rtc] handleAnswer ←', { from: p.from });
     const slot = slotsRef.current.get(p.from);
-    if (!slot) return;
+    if (!slot) {
+      console.warn('[rtc] handleAnswer: no slot for', p.from);
+      return;
+    }
     await slot.pc.setRemoteDescription({ type: 'answer', sdp: p.sdp });
   }, []);
 
   const handleIce = useCallback(async (p: WebRtcIcePayload) => {
     const slot = slotsRef.current.get(p.from);
-    if (!slot) return;
+    if (!slot) {
+      console.warn('[rtc] handleIce: no slot for', p.from);
+      return;
+    }
     try {
       await slot.pc.addIceCandidate(p.candidate);
-    } catch {
-      /* candidate may arrive before remote description; safe to drop */
+    } catch (err) {
+      console.warn('[rtc] handleIce: addIceCandidate failed', {
+        from: p.from,
+        hasRemote: !!slot.pc.remoteDescription,
+        err: (err as Error).message,
+      });
     }
   }, []);
 

@@ -87,6 +87,10 @@ export function useCall(args: Args) {
       stream.getAudioTracks().forEach((t) => (t.enabled = false));
       stream.getVideoTracks().forEach((t) => (t.enabled = false));
       streamRef.current = stream;
+      console.log('[rtc] acquireStream ok', {
+        audio: stream.getAudioTracks().length,
+        video: stream.getVideoTracks().length,
+      });
       return stream;
     } catch (err) {
       const name = (err as Error).name;
