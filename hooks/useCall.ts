@@ -17,6 +17,12 @@ export type CallPresenceExtras = {
   name: string;
   city: string | null;
   joined_at: number;
+  /**
+   * Wall-clock ms at the moment this `ch.track()` payload was written.
+   * Distinct from `joined_at` (the session's stable identity used for host
+   * election). Drives `dedupePresence` — see lib/sync-utils.ts for why.
+   */
+  tracked_at: number;
   on_call_intent: boolean;
 };
 
@@ -89,6 +95,7 @@ export function useCall(args: Args) {
       name: a.selfName ?? '',
       city: a.selfCity ?? null,
       joined_at: a.selfJoinedAt ?? Date.now(),
+      tracked_at: Date.now(),
       on_call_intent: onCallIntent,
     };
     console.log('[rtc] updatePresence', { intent: onCallIntent });

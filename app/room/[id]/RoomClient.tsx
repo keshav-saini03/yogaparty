@@ -83,6 +83,12 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   // with the current value on (re)connect. Without this, reconnects reset
   // server-side presence to false and peers never see us as on-call.
   const callIntentRef = useRef(false);
+  // Stable per-mount session timestamp. Used as `joined_at` in every
+  // ch.track() payload AND as the value useCall passes back to updatePresence.
+  // MUST be a ref, not Date.now() per render — host election compares
+  // joined_at across participants, and a value that drifts on every render
+  // can cause the host to flicker.
+  const selfJoinedAtRef = useRef(Date.now());
 
   const { hostId, isHost, host } = usePresence(participants, self);
   isHostRef.current = isHost;
@@ -142,7 +148,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     selfId: self.user_id,
     selfName: self.name,
     selfCity: self.city,
-    selfJoinedAt: Date.now(),
+    selfJoinedAt: selfJoinedAtRef.current,
     channel,
     peersOnCall: () => peersOnCall,
     onCreateOfferTo: peers.createOfferTo,
@@ -414,7 +420,8 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
           user_id: self.user_id,
           name: self.name,
           city: self.city,
-          joined_at: Date.now(),
+          joined_at: selfJoinedAtRef.current,
+          tracked_at: Date.now(),
           on_call_intent: intent,
         });
         setIsReady(true);

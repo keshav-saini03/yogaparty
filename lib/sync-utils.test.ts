@@ -133,33 +133,91 @@ describe('dedupePresence', () => {
     expect(result.map((p) => p.user_id).sort()).toEqual(['a', 'b']);
   });
 
-  it('dedupes by user_id keeping earliest joined_at', () => {
+  it('dedupes by user_id keeping latest tracked_at', () => {
     const state = {
-      k1: [mk('a', 2000)],
-      k2: [mk('a', 1000)],
+      k1: [{ ...mk('a', 1000), tracked_at: 5000 }],
+      k2: [{ ...mk('a', 1000), tracked_at: 9000 }],
     };
     const result = dedupePresence(state);
     expect(result).toHaveLength(1);
-    expect(result[0].joined_at).toBe(1000);
+    expect(result[0].tracked_at).toBe(9000);
+  });
+
+  it('falls back to joined_at when tracked_at is missing (back-compat)', () => {
+    const state = {
+      k1: [mk('a', 1000)],
+      k2: [mk('a', 2000)],
+    };
+    const result = dedupePresence(state);
+    expect(result).toHaveLength(1);
+    expect(result[0].joined_at).toBe(2000);
   });
 
   it('returns empty array on empty state', () => {
     expect(dedupePresence({})).toEqual([]);
   });
 
-  it('prefers on_call_intent:true entry over on_call_intent:false for same user', () => {
-    // Reproduces the production bug: Supabase keeps both ch.track payloads
-    // (initial {intent:false} + later {intent:true}) under one connection's
-    // state[user_id] array. Naive "earliest joined_at" picked the false
-    // entry, so peers never saw the toggle. Intent-aware dedup wins.
+  it('latest tracked_at carries the user\'s current on_call_intent', () => {
+    // Reproduces the production bug from a different angle: Supabase keeps
+    // BOTH the initial {intent:false} ch.track payload and the later
+    // {intent:true} payload under one connection. The right collapse picks
+    // whichever was written most recently. tracked_at makes that explicit
+    // (it's the wall-clock at each ch.track() call) instead of relying on
+    // joined_at, which can drift across reconnects.
     const state = {
       conn: [
-        { user_id: 'a', name: 'A', city: null, joined_at: 1000, on_call_intent: false },
-        { user_id: 'a', name: 'A', city: null, joined_at: 2000, on_call_intent: true },
+        {
+          user_id: 'a',
+          name: 'A',
+          city: null,
+          joined_at: 1000,
+          tracked_at: 1000,
+          on_call_intent: false,
+        },
+        {
+          user_id: 'a',
+          name: 'A',
+          city: null,
+          joined_at: 1000,
+          tracked_at: 2000,
+          on_call_intent: true,
+        },
       ],
     };
     const result = dedupePresence(state);
     expect(result).toHaveLength(1);
     expect(result[0].on_call_intent).toBe(true);
+  });
+
+  it('a fresh intent:false write wins over a stale intent:true', () => {
+    // The failure mode the old intent-aware rule couldn't see: a stale
+    // {intent:true} entry from a closed tab outranking a fresh
+    // {intent:false} write from the same user's reconnect. tracked_at
+    // resolves it correctly because the reconnect's payload is newer.
+    const state = {
+      stale: [
+        {
+          user_id: 'a',
+          name: 'A',
+          city: null,
+          joined_at: 1000,
+          tracked_at: 1000,
+          on_call_intent: true,
+        },
+      ],
+      fresh: [
+        {
+          user_id: 'a',
+          name: 'A',
+          city: null,
+          joined_at: 5000,
+          tracked_at: 5000,
+          on_call_intent: false,
+        },
+      ],
+    };
+    const result = dedupePresence(state);
+    expect(result).toHaveLength(1);
+    expect(result[0].on_call_intent).toBe(false);
   });
 });

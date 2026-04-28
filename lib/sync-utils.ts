@@ -3,6 +3,16 @@ export type Participant = {
   name: string;
   city: string | null;
   joined_at: number;
+  /**
+   * Wall-clock ms of the last `ch.track()` payload. Distinct from
+   * `joined_at` (which is the session's stable identity for host election).
+   * Supabase Realtime keeps every track payload as a separate metadata
+   * entry, so dedup picks the entry with the latest `tracked_at` to reflect
+   * the user's *current* intent. Stale entries from refreshed/closed tabs
+   * are automatically demoted because their tracked_at is older than the
+   * fresh session's first track.
+   */
+  tracked_at?: number;
   on_call_intent?: boolean;
 };
 
@@ -67,27 +77,28 @@ export function pickCorrection(
 export function dedupePresence(
   state: Record<string, Participant[]>
 ): Participant[] {
+  // Supabase Realtime keeps every `ch.track()` payload as a separate metadata
+  // entry under the connection's presence_ref, so a user's array can hold
+  // multiple snapshots: an initial {on_call_intent:false}, a later
+  // {on_call_intent:true} after the toggle, and stale entries from previous
+  // sessions that haven't expired yet.
+  //
+  // Rule: pick the entry with the highest `tracked_at` (wall-clock ms at
+  // write time). That's the user's *most recent* declared state. Falls back
+  // to `joined_at` when `tracked_at` is missing (back-compat with entries
+  // written by older clients during a deploy window). The previous
+  // intent-aware rule had two failure modes:
+  //   1. A stale {intent:true} from a closed tab outranks a fresh
+  //      {intent:false} from the same user's reconnect.
+  //   2. Two equal-intent entries broke ties on joined_at, but joined_at
+  //      shifts when we re-track on reconnect, so the winner could flip.
+  // tracked_at sidesteps both by being monotonic per session.
   const seen = new Map<string, Participant>();
+  const ts = (p: Participant) => p.tracked_at ?? p.joined_at;
   for (const arr of Object.values(state)) {
     for (const p of arr) {
       const existing = seen.get(p.user_id);
-      if (!existing) {
-        seen.set(p.user_id, p);
-        continue;
-      }
-      // Supabase Realtime keeps every `ch.track()` payload as a separate
-      // metadata entry under the connection's presence_ref. After the user
-      // toggles on-call, state[user_id] holds BOTH the initial
-      // {on_call_intent:false} and the later {on_call_intent:true}. Picking
-      // earliest `joined_at` (the previous rule) silently dropped the
-      // toggle. The right collapse is intent-aware: a user is on-call if
-      // ANY entry says so. Among equal-intent entries we keep the earliest
-      // joined_at so host election (which uses joined_at) stays stable.
-      const existingOn = !!existing.on_call_intent;
-      const candidateOn = !!p.on_call_intent;
-      if (candidateOn && !existingOn) {
-        seen.set(p.user_id, p);
-      } else if (candidateOn === existingOn && p.joined_at < existing.joined_at) {
+      if (!existing || ts(p) > ts(existing)) {
         seen.set(p.user_id, p);
       }
     }
