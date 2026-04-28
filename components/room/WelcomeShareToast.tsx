@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { WhatsAppShareButton } from '@/components/share/WhatsAppShareButton';
 
 const AUTO_DISMISS_MS = 8_000;
@@ -12,11 +12,18 @@ type Props = {
 };
 
 export function WelcomeShareToast({ open, shareText, onDismiss }: Props) {
+  // Capture the latest callback without making the auto-dismiss effect
+  // depend on its identity — callers (RoomClient) re-render frequently and
+  // re-create their `onDismiss` arrow each time, which would otherwise
+  // restart the 8s timer on every parent re-render.
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+
   useEffect(() => {
     if (!open) return;
-    const id = window.setTimeout(onDismiss, AUTO_DISMISS_MS);
+    const id = window.setTimeout(() => onDismissRef.current(), AUTO_DISMISS_MS);
     return () => window.clearTimeout(id);
-  }, [open, onDismiss]);
+  }, [open]);
 
   if (!open) return null;
 
