@@ -809,6 +809,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
                 participants={participants}
                 hostId={hostId}
                 selfId={self.user_id}
+                speakingPeerIds={audioDuck.speakingPeerIds}
               />
             </section>
           </div>
