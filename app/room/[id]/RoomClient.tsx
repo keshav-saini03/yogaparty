@@ -77,6 +77,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
   const [messages, setMessages] = useState<ChatMsg[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [unreadChat, setUnreadChat] = useState(0);
   const [pickError, setPickError] = useState<string | null>(null);
   const [welcomeOpen, setWelcomeOpen] = useState(false);
 
@@ -293,6 +294,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     // ── Chat ─────────────────────────────────────────────────────
     ch.on('broadcast', { event: 'chat' }, ({ payload }) => {
       setMessages((prev) => [...prev, payload as ChatMsg]);
+      setUnreadChat((n) => n + 1);
     });
 
     // ── Video swap ───────────────────────────────────────────────
@@ -609,6 +611,16 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     setWelcomeOpen(true);
   }, [self.user_id]);
 
+  // Reset unread badge when viewport widens to md+ (desktop sidebar always visible).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const reset = () => mq.matches && setUnreadChat(0);
+    reset();
+    mq.addEventListener('change', reset);
+    return () => mq.removeEventListener('change', reset);
+  }, []);
+
   const dismissWelcome = () => {
     setWelcomeOpen(false);
     if (typeof window !== 'undefined') {
@@ -691,8 +703,15 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
         city={roomCity}
         participantCount={participants.length}
         selfId={self.user_id}
-        onChatToggle={() => setChatOpen((v) => !v)}
+        onChatToggle={() => {
+          setChatOpen((v) => {
+            const next = !v;
+            if (next) setUnreadChat(0);
+            return next;
+          });
+        }}
         isMobileChatOpen={chatOpen}
+        unreadChat={unreadChat}
       />
 
       <div className="flex-1 flex flex-col md:flex-row min-h-0">
