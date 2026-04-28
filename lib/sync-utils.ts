@@ -3,6 +3,7 @@ export type Participant = {
   name: string;
   city: string | null;
   joined_at: number;
+  on_call_intent?: boolean;
 };
 
 export function electHost(participants: Participant[]): Participant | null {

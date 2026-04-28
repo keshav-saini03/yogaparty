@@ -59,6 +59,12 @@ type Props = {
   onReady?: (handle: PlayerHandle) => void;
   onEvent?: (name: PlayerEventName, currentTime: number) => void;
   className?: string;
+  /**
+   * Override volume from the audio-duck system. When provided, it takes
+   * precedence over the local slider value but does not write back to it
+   * — slider state remains user-owned.
+   */
+  duckedVolume?: number;
 };
 
 export function Player({
@@ -68,6 +74,7 @@ export function Player({
   onReady,
   onEvent,
   className,
+  duckedVolume,
 }: Props) {
   const ytRef = useRef<YouTubePlayer | null>(null);
   const handleRef = useRef<PlayerHandle | null>(null);
@@ -86,16 +93,17 @@ export function Player({
   useEffect(() => {
     const p = ytRef.current;
     if (!p || !ready) return;
+    const effective = typeof duckedVolume === 'number' ? duckedVolume : volume;
     try {
-      if (volume === 0) p.mute?.();
+      if (effective <= 0) p.mute?.();
       else {
         p.unMute?.();
-        p.setVolume?.(volume);
+        p.setVolume?.(Math.round(effective));
       }
     } catch {
-      // player may have been destroyed mid-update; safe to ignore
+      /* player may have been destroyed mid-update; safe to ignore */
     }
-  }, [volume, ready]);
+  }, [volume, duckedVolume, ready]);
 
   // Imperative load when videoId changes — avoid full unmount/remount.
   useEffect(() => {
