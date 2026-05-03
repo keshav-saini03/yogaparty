@@ -1,12 +1,15 @@
 import Link from 'next/link';
 import { WhatsAppShareButton } from '@/components/share/WhatsAppShareButton';
+import { CopyLinkButton } from '@/components/share/CopyLinkButton';
 import { SignOutButton } from '@/components/share/SignOutButton';
-import { inRoomInviteCopy } from '@/lib/whatsapp';
+import { buildRoomShareUrl, inRoomInviteCopy } from '@/lib/whatsapp';
 
 type Props = {
   city: string | null;
   participantCount: number;
   selfId: string;
+  /** Room UUID — used to build the shareable room URL. */
+  roomId?: string;
   onChatToggle?: () => void;
   isMobileChatOpen?: boolean;
   /** Mobile-only unread message count. 0 hides the badge. */
@@ -17,6 +20,7 @@ export function RoomHeader({
   city,
   participantCount,
   selfId,
+  roomId,
   onChatToggle,
   isMobileChatOpen,
   unreadChat = 0,
@@ -28,7 +32,9 @@ export function RoomHeader({
     cityCount: participantCount,
     cityName: city,
     refId: selfId,
+    roomId,
   });
+  const shareUrl = buildRoomShareUrl(roomId, selfId);
 
   return (
     <header className="border-b border-[color:var(--line)] bg-[color:var(--bg)]">
@@ -63,6 +69,8 @@ export function RoomHeader({
             label="Invite friends"
             variant="pill"
           />
+
+          {roomId && <CopyLinkButton url={shareUrl} label="Copy link" />}
 
           {onChatToggle && (
             <button

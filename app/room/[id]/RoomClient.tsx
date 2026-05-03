@@ -710,6 +710,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
     cityCount: participants.length,
     cityName: roomCity,
     refId: self.user_id,
+    roomId,
   });
 
   // Suppress unused-host warning while keeping it accessible if needed.
@@ -721,6 +722,7 @@ export function RoomClient({ roomId, roomCity, initialVideoId, self }: Props) {
         city={roomCity}
         participantCount={participants.length}
         selfId={self.user_id}
+        roomId={roomId}
         onChatToggle={() => {
           setChatOpen((v) => {
             const next = !v;

@@ -40,10 +40,28 @@ export function buildShareUrl(text: string): string {
   return `${WA_BASE}${encodeURIComponent(text)}`;
 }
 
+/**
+ * Build the absolute URL for a room invite. Without `roomId` falls back to
+ * the app root — that path goes nowhere useful for the recipient (lobby
+ * needs them signed in), so callers should always pass roomId when they
+ * have one. Ref is appended via withRef so the existing referral tracking
+ * keeps working.
+ */
+export function buildRoomShareUrl(
+  roomId: string | null | undefined,
+  refId?: string | null,
+): string {
+  const base = getAppUrl();
+  const target = roomId ? `${base}/room/${roomId}` : base;
+  return withRef(target, refId);
+}
+
 type CopyArgs = {
   cityCount?: number;
   cityName?: string | null;
   refId?: string | null;
+  /** When set, share link points to /room/{roomId} instead of app root. */
+  roomId?: string | null;
 };
 
 function cleanCity(city: string | null | undefined): string {
@@ -54,8 +72,8 @@ function cleanCity(city: string | null | undefined): string {
 /**
  * Trigger 1 — post-signup (the user just landed in their room).
  */
-export function postSignupCopy({ cityCount, cityName, refId }: CopyArgs): string {
-  const link = withRef(getAppUrl(), refId);
+export function postSignupCopy({ cityCount, cityName, refId, roomId }: CopyArgs): string {
+  const link = buildRoomShareUrl(roomId, refId);
   const count = typeof cityCount === 'number' && cityCount > 0 ? cityCount : 0;
   const city = cleanCity(cityName);
 
@@ -76,7 +94,7 @@ export function postSignupCopy({ cityCount, cityName, refId }: CopyArgs): string
  * §"In-Room"). Same intent as post-signup, slightly different framing.
  */
 export function inRoomInviteCopy(args: CopyArgs): string {
-  const link = withRef(getAppUrl(), args.refId);
+  const link = buildRoomShareUrl(args.roomId, args.refId);
   const city = cleanCity(args.cityName);
   const count = typeof args.cityCount === 'number' && args.cityCount > 0 ? args.cityCount : 0;
 
@@ -106,8 +124,8 @@ export function cityCompetitionCopy({ cityName, refId }: CopyArgs): string {
 /**
  * Trigger 4 — post-session (Phase 7 polish). Exposed here for that phase.
  */
-export function postSessionCopy({ cityCount, cityName, refId }: CopyArgs): string {
-  const link = withRef(getAppUrl(), refId);
+export function postSessionCopy({ cityCount, cityName, refId, roomId }: CopyArgs): string {
+  const link = buildRoomShareUrl(roomId, refId);
   const count = typeof cityCount === 'number' && cityCount > 0 ? cityCount : 0;
   const city = cleanCity(cityName);
   if (count >= 2 && city) {
