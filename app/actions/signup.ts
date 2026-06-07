@@ -85,7 +85,18 @@ export async function createSignup(
   const city = await getDetectedCity();
   const supabase = createAdminClient();
 
-  let { data, error } = await supabase
+  // Pre-validate referrer: stale/unknown UUIDs (e.g. from an old test link)
+  // would otherwise trip an FK violation. Cheap with the admin client.
+  if (referrerId) {
+    const ref = await supabase
+      .from('signups')
+      .select('id')
+      .eq('id', referrerId)
+      .maybeSingle();
+    if (!ref.data?.id) referrerId = null;
+  }
+
+  const { data, error } = await supabase
     .from('signups')
     .insert({
       name,
@@ -96,23 +107,6 @@ export async function createSignup(
     })
     .select('id, city')
     .single();
-
-  if (error?.code === '23503' && referrerId !== null) {
-    referrerId = null;
-    const retry = await supabase
-      .from('signups')
-      .insert({
-        name,
-        phone,
-        country_code: countryCode,
-        city,
-        referrer_id: referrerId,
-      })
-      .select('id, city')
-      .single();
-    data = retry.data;
-    error = retry.error;
-  }
 
   if (error?.code === '23505') {
     const existing = await supabase
@@ -133,7 +127,12 @@ export async function createSignup(
 
   if (error || !data) {
     console.error('signup insert failed', error);
-    return { error: 'Something went wrong. Try again.' };
+    const detail = error?.message || error?.code;
+    return {
+      error: detail
+        ? `Couldn't save your signup (${detail}). Try again.`
+        : 'Something went wrong. Try again.',
+    };
   }
 
   await setSessionCookie(data.id);
